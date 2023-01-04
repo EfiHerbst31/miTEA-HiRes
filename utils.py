@@ -6,7 +6,7 @@ import numpy as np
 import os
 import multiprocessing as mp
 import glob
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 
 def check_data_type(data_path, dataset_name):
@@ -22,7 +22,7 @@ def check_data_type(data_path, dataset_name):
     """
     dataset_path = os.path.join(data_path, dataset_name)
     counts_path = os.path.join(dataset_path, "filtered_feature_bc_matrix")
-    is_spatial = os.path.isdir(counts_path)
+    is_spatial = os.path.exists(counts_path)
     if is_spatial:
         data_type = 'spatial'
     else:
@@ -83,9 +83,10 @@ def mti_loader(species = 'homo_sapiens'):
     print('Loading MTIs...') #change to verbose
     if species == "homo_sapiens":
         mti_data = pd.read_csv(os.path.join(mti_path, homo_mti_file), index_col=0)
-    else:
+    elif species == "mus_musculus":
         mti_data = pd.read_csv(os.path.join(mti_path, mus_mti_file), index_col=0)
-
+    else:
+        raise Exception('type of species not recognized, either "homo_sapiens" or "mus_musculus" are supported. For other species type, please download the mti data file and update mti_loader function')
     return mti_data #need to return this?
 
 
@@ -139,20 +140,32 @@ def visium_loader(dataset_name, data_path):
 
     return counts
 
-def get_spatial_coors(dataset_name, data_path):
+def get_spatial_coors(dataset_name, data_path, counts):
     """
     Loads spatial coordinates
     input:
         param dataset_name: dataset folder name
         param data_path: path for dataset folder
+        param counts: reads table
     return spatial_coors
     """
 
     dataset_path = os.path.join(data_path, dataset_name)
     spatial_path = os.path.join(dataset_path, "spatial")
-    spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), index_col=0, sep=',',header=None) #verify different versions
-    spatial_coors = spatial_coors.loc[list(counts)]
-    spatial_coors = np.array(spatial_coors[[3, 2]])
+    try:
+        spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), index_col=0, sep=',', header='infer')
+        spatial_coors = spatial_coors.loc[list(counts)]
+        spatial_coors = np.array(spatial_coors[['array_col','array_row']])
+    except:
+        try:
+            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), index_col=0, sep=',',header=None) #verify different versions
+            spatial_coors = spatial_coors.loc[list(counts)]
+            spatial_coors = np.array(spatial_coors[[3, 2]])
+        except:
+            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions.csv"), index_col=0, sep=',', header='infer')
+            spatial_coors = spatial_coors.loc[list(counts)]
+            spatial_coors = np.array(spatial_coors[['array_col','array_row']])
+
     return spatial_coors
 
 def scRNAseq_loader(dataset_name, data_path):
@@ -220,7 +233,8 @@ def compute_mir_activity(counts, miR_list, mti_data, results_path, cpus):
         miR_activity_cutoffs.loc[:, cell] = result[3]
 
     if not os.path.exists(results_path):
-        os.mkdir(results_path)
+        os.makedirs(results_path)
+
     miR_activity_stats.to_csv(results_path + '/activity_stats.csv')
     miR_activity_pvals.to_csv(results_path + '/activity_pvals.csv')
     miR_activity_cutoffs.to_csv(results_path + '/activity_cutoffs.csv')
@@ -241,11 +255,11 @@ def compute_stats_per_cell(cell, ranked, miR_list, mti_data):
 
     #setting parameters for mHG package
     X = 1
-    L = len(counts)
+    L = len(ranked)
 
-    if verbose:
-        print(cell)
-    
+    # if verbose:
+    #     print(cell)
+
     ranked_list = list(ranked.index)
     miR_activity_stats = []
     miR_activity_pvals = []
@@ -253,6 +267,10 @@ def compute_stats_per_cell(cell, ranked, miR_list, mti_data):
     for miR in miR_list:
         miR_targets = list(mti_data[mti_data["miRNA"] == miR]["Target Gene"])
         v = np.uint8([int(g in miR_targets) for g in ranked_list])
+        # if sum(v) == 0: #somehow add to log if all are 1 for this microRNA
+        #     print('no targets found for ' + miR)
+        #     print(miR_targets)
+        #     raise Exception('no targets were found for microRNA: ' + miR + '. please check that correct \'species\' flag was selected')
         stat, cutoff, pval = xlmhg.xlmhg_test(v, X=X, L=L)
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
@@ -260,7 +278,7 @@ def compute_stats_per_cell(cell, ranked, miR_list, mti_data):
 
     return (cell , miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs)
 
-def sort_activity_spatial(miR_activity_pvals, thresh, spots, results_path):
+def sort_activity_spatial(miR_activity_pvals, thresh, spots, results_path, dataset_name):
     """
     computes which microRNAs are the most active within the entire slide
     input:
@@ -270,9 +288,9 @@ def sort_activity_spatial(miR_activity_pvals, thresh, spots, results_path):
         param: results_path - where to save the sorted list of most highly expressed microRNA
     return: mir_expression - sorted list of microRNA, from the most overall active to the least, over the extire slide
     """
-    expressed_mir = miR_activity_pvals[miR_activity_pvals < thresh].count(axis=1).sort_values(ascending = False)
-    expressed_mir = expressed_mir / spots
-    expressed_mir.to_csv(results_path + '/expressed_mir_th' + str(thresh) + '_' + dataset_name + '.csv')
+    mir_expression = miR_activity_pvals[miR_activity_pvals < thresh].count(axis=1).sort_values(ascending = False)
+    mir_expression = mir_expression / spots
+    mir_expression.to_csv(results_path + '/mir_expression_th' + str(thresh) + '_' + dataset_name + '.csv')
 
     return mir_expression
 
@@ -288,7 +306,7 @@ def produce_spatial_maps(miR_list_figures, miR_activity_pvals, spatial_coors, re
     """
     results_path_figures = os.path.join(results_path, 'activity maps')
     if not os.path.exists(results_path_figures):
-        os.mkdir(results_path_figures)
+        os.makedirs(results_path_figures)
 
     for miR in miR_list_figures:
         pvals = miR_activity_pvals.loc[miR, :]
@@ -297,18 +315,9 @@ def produce_spatial_maps(miR_list_figures, miR_activity_pvals, spatial_coors, re
         plt.figure(figsize = (10, 10))
         plt.scatter(spatial_coors[:, 0], spatial_coors[:, 1], c=log10_pvals, vmin=np.min(log10_pvals), vmax=np.max(log10_pvals))
         plt.gca().invert_yaxis()
-        plt.colorbar(ax, extend='max').ax.set_ylabel('p-value (-log10)', rotation=270, labelpad=20)
+        plt.colorbar(extend='max').set_label('p-value (-log10)', rotation=270, labelpad=20)
         plt.title(miR + ' activity map', fontsize=14)
         plt.savefig(path_to_plot)
-
-
-
-
-
-
-
-
-
 
 
 
