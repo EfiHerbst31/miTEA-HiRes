@@ -1,80 +1,102 @@
-import xlmhg
 import csv
-import scipy.io
-import pandas as pd
-import numpy as np
-import os
-import multiprocessing as mp
 import glob
+import multiprocessing as mp
+import os
+from typing import Tuple
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import scipy.io
+import xlmhg
 
 
-def check_data_type(data_path, dataset_name):
-    """
-    checks if single cell or spatial data
+def check_data_type(data_path: str, dataset_name: str) -> str:
+    """Checks if data is single cell or spatial.
     
-    input:
-    param dataset_name: dataset folder name
-    param data_path: path for dataset folder
+    If 'filtered_feature_bc_matrix' exists in the expected folder, 
+    data type is considered spatial, and scRNAseq otherwise.
 
-    return:
-    data_type - "scRNAseq" or "spatial"
+    Args:
+        dataset_name: dataset folder name.
+        data_path: path for dataset folder.
+
+    Returns:
+        the data type of the provided dataset, "scRNAseq" or "spatial".
     """
+
     dataset_path = os.path.join(data_path, dataset_name)
     counts_path = os.path.join(dataset_path, "filtered_feature_bc_matrix")
     is_spatial = os.path.exists(counts_path)
     if is_spatial:
-        data_type = 'spatial'
+        return 'spatial'
     else:
-        data_type = 'scRNAseq'
+        return 'scRNAseq'
 
-    return data_type
 
-def detect_data_file(data_path, dataset_name):
-    """
-    checks scRNAseq file extention and returns detected file name
+def detect_data_file(data_path: str, dataset_name: str) -> str:
+    """Checks scRNAseq file extention and returns detected file name.
     
-    input:
-    param dataset_name: dataset folder name
-    param data_path: path for dataset folder
+    Supported extensions: txt, tsv or pkl.
+    Prioratizing for pkl file, assuming it contains processed data.
 
-    return:
-    file_name - detected file, either txt or tsv are supported, single file
+    Args:
+        dataset_name: dataset folder name.
+        data_path: path for dataset folder.
+
+    Return:
+        the detected file name.
+
+    Raises:    
+        Exception if more than one file was detected.
+        Exception if no file of types txt, tsv or pkl was found.
     """
+
+    pkl_file = glob.glob(data_path + '/*.pkl')
     txt_files = glob.glob(data_path + '/*.txt')
     tsv_files = glob.glob(data_path + '/*.tsv')
-    pkl_file = glob.glob(data_path + '/*.pkl')
     if pkl_file:
         if len(pkl_file) > 1: 
-            print("error: there seem to be more than one pkl file, please merge to a single file") #proper error
+            print("error: there seem to be more than one pkl file, \
+            please merge to a single file") #proper error
         else:
             file_name = pkl_file[0]        
     elif txt_files:
         if len(txt_files) > 1: 
-            print("error: there seem to be more than one txt file, please merge to a single file") #proper error
+            print("error: there seem to be more than one txt file, \
+                please merge to a single file") #proper error
         else:
             file_name = txt_files[0]
     elif tsv_files:
         if len(tsv_files) > 1: 
-            print("error: there seem to be more than one tsv file, please merge to a single file") #proper error
+            print("error: there seem to be more than one tsv file, \
+                please merge to a single file") #proper error
         else:
             file_name = tsv_files[0]
     try:
         return file_name #need to fix - 'UnboundLocalError: local variable 'file_name' referenced before assignment'
     except:
-        raise ValueError("error: no pkl, txt or tsv data files were detected in: ", data_path) #proper error
+        raise Exception("error: no pkl, txt or tsv data files \
+            were detected in: ", data_path) #proper error
     
 
+def mti_loader(species: str = 'homo_sapiens') -> pd.DataFrame:
+    """Loads MTI data.
+    
+    If other species is required, please download the mti data and 
+        update this function.
 
-def mti_loader(species = 'homo_sapiens'):
-    """
-     Loads mti data
-     param species (optional): 'homo_sapiens' (default) or 'mus_musculus'
+    Args:
+        species: 'homo_sapiens' (default) or 'mus_musculus'.
+
+    Returns:
+        MTI (microRNA targets) data.
+    
+    Raises:
+        exception if species type is not recognized.
     """
 
     mti_loc = 'miRTarBase/release_8.0'
-#    print(os.path.dirname(os.path.realpath(__file__)))
-    #mti_path = os.path.join(os.curdir(__file__),mti_loc)
     mti_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), mti_loc)
     print(mti_path)
     homo_mti_file = 'hsa_MTI_filtered.csv'
@@ -86,19 +108,29 @@ def mti_loader(species = 'homo_sapiens'):
     elif species == "mus_musculus":
         mti_data = pd.read_csv(os.path.join(mti_path, mus_mti_file), index_col=0)
     else:
-        raise Exception('type of species not recognized, either "homo_sapiens" or "mus_musculus" are supported. For other species type, please download the mti data file and update mti_loader function')
-    return mti_data #need to return this?
+        raise Exception('type of species not recognized, either "homo_sapiens" or \
+            "mus_musculus" are supported. For other species type, \
+                please download the mti data file and update mti_loader function')
+    return mti_data 
 
 
-def switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file, save_to_file=False, path_to_save=None):
+def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str, 
+    barcodes_tsv_file: str, save_to_file: bool = False, 
+    path_to_save: str = None) -> pd.DataFrame:
+    """Converts visium data to reads table 
+        where columns are the spots and rows are gene reads.
+
+    Args:
+        matrix_mtx_file: path to matrix.mtx that was downloaded from visium website.
+        features_tsv_file: path to features.tsv that was downloaded from visium website.
+        barcodes_tsv_file: path to barcodes.tsv that was downloaded from visium website.
+        save_to_file: save generated data table to file at new_txt_file, default = False.
+        path_to_save: path to save the generated data table if save_to_file is True, default = None.
+
+    Returns:
+        reads table.
     """
-    converts visium data to reads pandas table where columns are the spots and rows are gene reads.
-    param: matrix_mtx_file - as downloaded from visium
-    param: features_tsv_file - as downloaded from visium
-    param: barcodes_tsv_file - as downloaded from visium
-    param (optional): save_to_file - save generated data table to file at new_txt_file, default = False.
-    param (optional): path_to_save - path to save the generated data table if save_to_file is True, default = None
-    """
+
     the_matrix = scipy.io.mmread(matrix_mtx_file).todense()
 
     with open(features_tsv_file) as fd:
@@ -121,13 +153,15 @@ def switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file, sav
     return data
 
 
-def visium_loader(dataset_name, data_path):
-    """
-     Loads visium data
-     input:
-        param dataset_name: dataset folder name
-        param data_path: path for dataset folder
-    return counts: reads table with spots (columns) and genes (rows)
+def visium_loader(dataset_name: str, data_path: str) -> pd.DataFrame:
+    """Loads visium data.
+
+    Args:
+        dataset_name: dataset folder name.
+        data_path: path to dataset folder.
+    
+    Returns:
+        reads table with spots (columns) and genes (rows).
     """
 
     print('Loading visium data...') #change to verbose
@@ -140,42 +174,53 @@ def visium_loader(dataset_name, data_path):
 
     return counts
 
-def get_spatial_coors(dataset_name, data_path, counts):
-    """
-    Loads spatial coordinates
-    input:
-        param dataset_name: dataset folder name
-        param data_path: path for dataset folder
-        param counts: reads table
-    return spatial_coors
+
+def get_spatial_coors(dataset_name: str, data_path: str, counts: pd.DataFrame) \
+     -> pd.DataFrame:
+    """Loads spatial coordinates.
+
+    Args:
+        dataset_name: dataset folder name.
+        data_path: path to dataset folder.
+        counts: reads table.
+
+    Returns:
+        spatial coordinates.
     """
 
     dataset_path = os.path.join(data_path, dataset_name)
     spatial_path = os.path.join(dataset_path, "spatial")
     try:
-        spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), index_col=0, sep=',', header='infer')
+        spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), 
+            index_col=0, sep=',', header='infer')
         spatial_coors = spatial_coors.loc[list(counts)]
         spatial_coors = np.array(spatial_coors[['array_col','array_row']])
     except:
         try:
-            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), index_col=0, sep=',',header=None) #verify different versions
+            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), 
+                index_col=0, sep=',',header=None) #verify different versions
             spatial_coors = spatial_coors.loc[list(counts)]
             spatial_coors = np.array(spatial_coors[[3, 2]])
         except:
-            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions.csv"), index_col=0, sep=',', header='infer')
+            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions.csv"), 
+                index_col=0, sep=',', header='infer')
             spatial_coors = spatial_coors.loc[list(counts)]
             spatial_coors = np.array(spatial_coors[['array_col','array_row']])
 
     return spatial_coors
 
-def scRNAseq_loader(dataset_name, data_path):
+
+def scRNAseq_loader(dataset_name: str, data_path: str) -> pd.DataFrame:
+    """Loads scRNAseq data.
+
+    Args:
+        dataset_name: dataset folder name.
+        data_path: path to dataset folder.
+
+    Returns:
+        reads table with cells (columns) and genes (rows).
     """
-    Loads scRNAseq data
-    input:
-        param dataset_name: dataset folder name
-        param data_path: path for dataset folder
-    return counts: reads table with cells (columns) and genes (rows)
-    """
+
     print('Loading scRNAseq data...') #change to verbose
     dataset_path = os.path.join(data_path, dataset_name)
     file_name = detect_data_file(data_path, dataset_name)
@@ -184,37 +229,52 @@ def scRNAseq_loader(dataset_name, data_path):
         counts = pd.read_csv(reads_file, delimiter="\t", index_col=0)        
     elif file_name.endswith('.tsv'):
         counts = pd.read_csv(reads_file, sep='\t', index_col=0, on_bad_lines='skip').T #need to verify
-    else: #pkl
+    else: #pkl file
         counts = pd.read_pickle(reads_file)
     return counts
 
-def normalize_counts(counts):
-    """
-    removing genes (rows) where all reads are zero
-    normalizing every spot/cell (column) such that they have the same amount of total reads
-    z-score transformation per gene (row)
+
+def normalize_counts(counts: pd.DataFrame) -> pd.DataFrame:
+    """Normalizing reads table.
+
+    Removing genes (rows) where all reads are zero.
+    Normalizing every spot/cell (column) such that 
+        they have the same amount of total reads.
+    z-score transformation per gene (row).
     
-    param: counts - reads table
-    return: norm_counts - normalized reads table
+    Args: 
+        counts: reads table.
+
+    Returns: 
+        normalized reads table.
     """
 
     counts_norm = counts.loc[counts.sum(axis=1) > 0]
-    counts_norm = counts_norm.divide(counts_norm.sum(), axis='columns').multiply(10000)
-    counts_norm = counts_norm.subtract(counts_norm.mean(axis=1), axis='index').divide(counts_norm.std(axis=1), axis='index')
+    counts_norm = counts_norm.divide(counts_norm.sum(), axis='columns').\
+        multiply(10000)
+    counts_norm = counts_norm.subtract(counts_norm.mean(axis=1), axis='index').\
+        divide(counts_norm.std(axis=1), axis='index')
     return counts_norm
 
-def compute_mir_activity(counts, miR_list, mti_data, results_path, cpus):
+
+def compute_mir_activity(counts: pd.DataFrame, miR_list: list, mti_data: pd.DataFrame, 
+    results_path: str, cpus: int) -> pd.DataFrame:
+    """Computing microRNA activity.
+
+    Multiprocessing of per cell/spot per microRNA computations.
+    Using mHG test.
+
+    Args:
+        counts: reads table.
+        miR_list: microRNAs to consider.
+        mti_data: microRNA targets data.
+        results_path: path to save results.
+        cpus: amount of cpus to use in parallel.
+
+    Returns: 
+        microRNA activity results achived using mHG test.
     """
-    computing microRNA activity
-    input:
-        param: counts - reads table
-        param: miR_list - microRNAs to consider
-        param: mti_data - microRNA targets data
-        param: results_path - path to save results
-        param: cpus - amount of 
-    return: miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs - miR activity results
-    """
-    #initializing results tables
+
     miR_activity_stats = pd.DataFrame(columns=list(counts), index=miR_list)
     miR_activity_pvals = pd.DataFrame(columns=list(counts), index=miR_list)
     miR_activity_cutoffs = pd.DataFrame(columns=list(counts), index=miR_list)
@@ -239,21 +299,28 @@ def compute_mir_activity(counts, miR_list, mti_data, results_path, cpus):
     miR_activity_pvals.to_csv(results_path + '/activity_pvals.csv')
     miR_activity_cutoffs.to_csv(results_path + '/activity_cutoffs.csv')
 
-    return miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs
+    return miR_activity_pvals
 
-def compute_stats_per_cell(cell, ranked, miR_list, mti_data):
-    """
-    computing microRNA activity per spot/cell
-    input:
-        param: cell -  column id
-        param: ranked - sorted reads column for the cell
-        param: miR_list - microRNAs to consider
-        param: mti_data - microRNA targets data
-    return: 
-        cell, miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs
+
+def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, 
+    mti_data: pd.DataFrame) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Computing microRNA activity per spot/cell.
+
+    Using mHG test.
+    If no targets are found in the reads table for a particular microRNA, 
+    the result will be p-value of 0 for all cells/spots.
+
+    Args:
+        cell:  column id.
+        ranked: sorted reads column for the cell.
+        miR_list: microRNAs to consider.
+        mti_data: microRNA targets data.
+
+    Returns: 
+        column id and microRNA activity results achived using mHG test.
     """
 
-    #setting parameters for mHG package
+    # Parameters for mHG package
     X = 1
     L = len(ranked)
 
@@ -276,34 +343,49 @@ def compute_stats_per_cell(cell, ranked, miR_list, mti_data):
         miR_activity_cutoffs.append(cutoff)
         miR_activity_pvals.append(pval)
 
-    return (cell , miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs)
+    return cell, miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs
 
-def sort_activity_spatial(miR_activity_pvals, thresh, spots, results_path, dataset_name):
+
+def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float, 
+    spots: int, results_path: str, dataset_name: str) -> pd.DataFrame:
+    """Computes which microRNAs are the most active within the entire slide.
+
+    Args:
+        miR_activity_pvals: activity table per spot per microRNA.
+        thresh: used for filtering only microRNAs/spt that got a score lower than thresh, 
+            i.e. very active.
+        spots: number of spots.
+        results_path: where to save the sorted list of most highly expressed microRNA.
+    
+    Returns: 
+        sorted list of microRNA, from the most overall active to the least, 
+            over the extire slide.
     """
-    computes which microRNAs are the most active within the entire slide
-    input:
-        param: miR_activity_pvals - activity table per spot per microRNA 
-        param: thresh - used for filtering only microRNAs/spt that got a score lower than thresh, i.e. very active
-        param: spots - number of spots
-        param: results_path - where to save the sorted list of most highly expressed microRNA
-    return: mir_expression - sorted list of microRNA, from the most overall active to the least, over the extire slide
-    """
-    mir_expression = miR_activity_pvals[miR_activity_pvals < thresh].count(axis=1).sort_values(ascending = False)
+
+    mir_expression = miR_activity_pvals[miR_activity_pvals < thresh].\
+        count(axis=1).sort_values(ascending = False)
     mir_expression = mir_expression / spots
-    mir_expression.to_csv(results_path + '/mir_expression_th' + str(thresh) + '_' + dataset_name + '.csv')
+    mir_expression.to_csv(results_path + '/mir_expression_th' + str(thresh) \
+        + '_' + dataset_name + '.csv')
 
     return mir_expression
 
-def produce_spatial_maps(miR_list_figures, miR_activity_pvals, spatial_coors, results_path, dataset_name):
+
+def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFrame, 
+    spatial_coors: pd.DataFrame, results_path: str, dataset_name: str):
+    """Produces a figure with activity map per microRNA in the list.
+
+    Args:
+        miR_list_figures: list of microRNAs to produce figures for.
+        miR_activity_pvals: activity per spot per microRNA.
+        spatial_coors: spatial location of each spot.
+        results_path: path to save figures.
+        dataset_name: for plot name.
+    
+    Returns:
+        None
     """
-    produces a figure with activity map per microRNA in the list
-    input:
-        param: miR_list_figures - list of microRNAs to produce figures for
-        param: miR_activity_pvals - activity per spot per microRNA
-        param: spatial_coors - spatial location of each spot
-        param: results_path - path to save figures
-        param: dataset_name - for plot name
-    """
+
     results_path_figures = os.path.join(results_path, 'activity maps')
     if not os.path.exists(results_path_figures):
         os.makedirs(results_path_figures)
@@ -313,7 +395,8 @@ def produce_spatial_maps(miR_list_figures, miR_activity_pvals, spatial_coors, re
         log10_pvals = -np.log10(pvals)
         path_to_plot = results_path_figures + '/' + dataset_name + '_' + miR + '.jpg'
         plt.figure(figsize = (10, 10))
-        plt.scatter(spatial_coors[:, 0], spatial_coors[:, 1], c=log10_pvals, vmin=np.min(log10_pvals), vmax=np.max(log10_pvals))
+        plt.scatter(spatial_coors[:, 0], spatial_coors[:, 1], c=log10_pvals, 
+            vmin=np.min(log10_pvals), vmax=np.max(log10_pvals))
         plt.gca().invert_yaxis()
         plt.colorbar(extend='max').set_label('p-value (-log10)', rotation=270, labelpad=20)
         plt.title(miR + ' activity map', fontsize=14)
