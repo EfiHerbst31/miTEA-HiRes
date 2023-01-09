@@ -1,13 +1,3 @@
-#TO DOs:
-# move prints to logs
-# add as many errors as neededץ what is the problem and how to solve it
-# add - display prgress nicely
-# add optional preprocessing for merging and sampling sc datasets
-
-#miR_list = ['mmu-miR-466i-5p', 'mmu-let-7b-5p', 'mmu-miR-505-3p']
-#miR_list = ['hsa-miR-300', 'hsa-miR-6502-5p', 'hsa-miR-6727-3p']
-#--dataset_name='Visium_Human_Breast_Cancer' --data_path='/Users/efi/Documents/Master in Computer Science/Thesis/microRNA/validation_data/visium' --miR_list=hsa-miR-300,hsa-miR-6502-5p,hsa-miR-6727-3p
-
 import multiprocessing as mp
 import os
 from pathlib import Path

@@ -31,8 +31,6 @@ def check_data_type(data_path: str) -> str:
         the data type of the provided dataset, "scRNAseq" or "spatial".
     """
 
-    #dataset_path = os.path.join(data_path, dataset_name)
-#    counts_path = os.path.join(dataset_path, "filtered_feature_bc_matrix")
     counts_path = os.path.join(data_path, "filtered_feature_bc_matrix")
     is_spatial = os.path.exists(counts_path)
     if is_spatial:
@@ -183,7 +181,6 @@ def visium_loader(data_path: str) -> pd.DataFrame:
     """
 
     logging.debug('Loading visium data') 
-#    dataset_path = os.path.join(data_path, dataset_name)
     counts_path = os.path.join(data_path, "filtered_feature_bc_matrix")
     matrix_mtx_file = os.path.join(counts_path, "matrix.mtx")
     features_tsv_file = os.path.join(counts_path, "features.tsv")
@@ -207,7 +204,6 @@ def get_spatial_coors(data_path: str, counts: pd.DataFrame) \
 
     logging.debug('Getting spatial coordinates')
 
-    #dataset_path = os.path.join(data_path, dataset_name)
     spatial_path = os.path.join(data_path, "spatial")
     try:
         spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), 
@@ -291,9 +287,7 @@ def scRNAseq_loader(data_path: str) -> pd.DataFrame:
 
     logging.debug('Loading scRNAseq data')
 
-    #dataset_path = os.path.join(data_path, dataset_name)
     file_name = detect_data_file(data_path)
-    #reads_file = os.path.join(dataset_path, file_name)
     if file_name.endswith('.txt'):
         counts = pd.read_csv(file_name, delimiter="\t", index_col=0)        
     elif file_name.endswith('.tsv'):
@@ -362,14 +356,6 @@ def compute_mir_activity(counts: pd.DataFrame, miR_list: list, mti_data: pd.Data
                                      miR_list, mti_data, debug) for cell in list(counts)]
         result_list = list(tqdm.tqdm(pool.istarmap(compute_stats_per_cell, iterable),
                           total=len(iterable)))
-        #    pass
-        # result_list = list(tqdm.tqdm(pool.istarmap(compute_stats_per_cell,
-        #                            [(cell, counts.loc[:, cell].sort_values(),
-        #                              miR_list, mti_data, debug) for cell in list(counts)]), total=len(list(counts))))
-
-        # result_list = list(tqdm.tqdm(pool.istarmap(compute_stats_per_cell,
-        #                            [(cell, counts.loc[:, cell].sort_values(),
-        #                              miR_list, mti_data, debug) for cell in list(counts)]), total=len(list(counts))))
 
     for result in result_list:
         cell = result[0]
