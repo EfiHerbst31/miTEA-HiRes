@@ -446,7 +446,7 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
     mir_expression = miR_activity_pvals[miR_activity_pvals < thresh].\
         count(axis=1).sort_values(ascending = False)
     mir_expression = mir_expression / spots
-    mir_expression.to_csv(results_path + '/mir_expression_th' + str(thresh) \
+    mir_expression.to_csv(results_path + '/sorted_mirs_by_activity_th' + str(thresh) \
         + '_' + dataset_name + '.csv')
 
     return mir_expression
