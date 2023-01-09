@@ -3,14 +3,20 @@ import glob
 import multiprocessing as mp
 import os
 from typing import Tuple
+import warnings
 
 from absl import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.io
+import tqdm    
 import xlmhg
 
+import istarmap
+
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def check_data_type(data_path: str) -> str:
     """Checks if data is single cell or spatial.
@@ -352,9 +358,18 @@ def compute_mir_activity(counts: pd.DataFrame, miR_list: list, mti_data: pd.Data
     logging.debug('Computing activity map')
 
     with mp.Pool(cpus) as pool:
-        result_list = pool.starmap(compute_stats_per_cell,
-                                   [(cell, counts.loc[:, cell].sort_values(),
-                                     miR_list, mti_data, debug) for cell in list(counts)])
+        iterable = [(cell, counts.loc[:, cell].sort_values(),
+                                     miR_list, mti_data, debug) for cell in list(counts)]
+        result_list = list(tqdm.tqdm(pool.istarmap(compute_stats_per_cell, iterable),
+                          total=len(iterable)))
+        #    pass
+        # result_list = list(tqdm.tqdm(pool.istarmap(compute_stats_per_cell,
+        #                            [(cell, counts.loc[:, cell].sort_values(),
+        #                              miR_list, mti_data, debug) for cell in list(counts)]), total=len(list(counts))))
+
+        # result_list = list(tqdm.tqdm(pool.istarmap(compute_stats_per_cell,
+        #                            [(cell, counts.loc[:, cell].sort_values(),
+        #                              miR_list, mti_data, debug) for cell in list(counts)]), total=len(list(counts))))
 
     for result in result_list:
         cell = result[0]
