@@ -1,9 +1,8 @@
 import csv
 import glob
-import multiprocessing as mp
+import multiprocessing.pool as mp
 import os
-from typing import Tuple
-import warnings
+from typing import Optional, Tuple
 
 from absl import logging
 import matplotlib.pyplot as plt
@@ -13,10 +12,46 @@ import scipy.io
 import tqdm    
 import xlmhg
 
-import istarmap
+import constants
 
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
+class my_pool(mp.Pool):
+    """Class which extends multiprocessing.pool.Pool  
+    with starmap method that can work with tqdm.
+    """
+
+    def istarmap(self, func, iterable, chunksize=1):
+        """Starmap-version of imap.
+
+        Args:
+            Same as mp.pool.Pool.starmap.
+        
+        Returns:
+            Same as mp.pool.Pool.starmap.
+        """
+
+        self._check_running()
+        if chunksize < 1:
+            raise ValueError(
+                "Chunksize must be 1+, not {0:n}".format(
+                    chunksize))
+
+        task_batches = mp.Pool._get_tasks(func, iterable, chunksize)
+        result = mp.IMapIterator(self)
+        self._taskqueue.put(
+            (
+                self._guarded_task_generation(result._job,
+                                            mp.starmapstar,
+                                            task_batches),
+                result._set_length
+            ))
+        return (item for chunk in result for item in chunk)
+
+class UsageError(Exception):
+    """Error type that is used when there is a problem with package usage
+    """
+
+    pass
 
 def check_data_type(data_path: str) -> str:
     """Checks if data is single cell or spatial.
@@ -38,6 +73,25 @@ def check_data_type(data_path: str) -> str:
     else:
         return 'scRNAseq'
 
+def get_data_file(data_path: str, file_extension: str) -> Optional[str]:
+    """Checks for existing file with specific extension in the data path.
+
+    Args:
+        data_path: path for dataset.
+        file_extension: file extension.
+
+    Returns:
+        the detected file.
+
+    Raises:    
+        UsageError: if more than one file was detected.
+    """
+
+    files = glob.glob(os.path.join(data_path, '*.' + file_extension))
+    if len(files) > 1:
+        raise UsageError('There seem to be more than one %s file. '
+                         'please merge to a single file', file_extension)
+    return next(iter(files), None)
 
 def detect_data_file(data_path: str) -> str:
     """Checks scRNAseq file extention and returns detected file name.
@@ -48,48 +102,24 @@ def detect_data_file(data_path: str) -> str:
     Args:
         data_path: path for dataset.
 
-    Return:
+    Returns:
         the detected file name.
 
     Raises:    
-        Exception if more than one file was detected.
-        Exception if no file of types txt, tsv or pkl was found.
+        UsageError: if no file of types txt, tsv or pkl was found.
     """
 
-    pkl_file = glob.glob(data_path + '/*.pkl')
-    txt_files = glob.glob(data_path + '/*.txt')
-    tsv_files = glob.glob(data_path + '/*.tsv')
-    if pkl_file:
-        if len(pkl_file) > 1: 
-            logging.error("Error: there seem to be more than one pkl file, \
-                please merge to a single file") 
-            raise Exception("Error: there seem to be more than one pkl file, \
-                please merge to a single file")
-        else:
-            file_name = pkl_file[0]        
-    elif txt_files:
-        if len(txt_files) > 1: 
-            logging.error("Error: there seem to be more than one txt file, \
-                please merge to a single file") 
-            raise Exception("Error: there seem to be more than one txt file, \
-                please merge to a single file or use \'preprocess\'=True flag for automatic preprocessing")
-        else:
-            file_name = txt_files[0]
-    elif tsv_files:
-        if len(tsv_files) > 1: 
-            logging.error("Error: there seem to be more than one tsv file, \
-                please merge to a single file") 
-            raise Exception("Error: there seem to be more than one tsv file, \
-                please merge to a single file or use \'preprocess\'=True flag for automatic preprocessing")
-        else:
-            file_name = tsv_files[0]
-    try:
-        return file_name 
-    except:
-        logging.error("Error: no pkl, txt or tsv data files \
-            were detected in: %s", data_path)
-        raise Exception("Error: no pkl, txt or tsv data files \
-            were detected in: ", data_path) 
+    data_file = (
+        get_data_file(data_path, 'pkl') or
+        get_data_file(data_path, 'txt') or
+        get_data_file(data_path, 'tsv')
+    )
+
+    if not data_file:
+        raise UsageError('No pkl, txt or tsv data files '
+                         'were detected in: ', data_path) 
+
+    return data_file
     
 
 def mti_loader(species: str = 'homo_sapiens') -> pd.DataFrame:
@@ -105,7 +135,7 @@ def mti_loader(species: str = 'homo_sapiens') -> pd.DataFrame:
         MTI (microRNA targets) data.
     
     Raises:
-        exception if species type is not recognized.
+        UsageError: if species type is not recognized.
     """
 
     mti_loc = 'miRTarBase/release_8.0'
@@ -115,17 +145,15 @@ def mti_loader(species: str = 'homo_sapiens') -> pd.DataFrame:
     mus_mti_file = 'mmu_MTI_filtered.csv'
 
     logging.debug('Loading MTIs...')
-    if species == "homo_sapiens":
+    if species == constants._SPECIES_HOMO_SAPIENS:
         mti_data = pd.read_csv(os.path.join(mti_path, homo_mti_file), index_col=0)
-    elif species == "mus_musculus":
+    elif species == constants._SPECIES_MUS_MUSCULUS:
         mti_data = pd.read_csv(os.path.join(mti_path, mus_mti_file), index_col=0)
     else:
-        logging.error('Type of species not recognized, either "homo_sapiens" or \
-            "mus_musculus" are supported. For other species type, \
-                please download the mti data file and update mti_loader function')
-        raise Exception('Type of species not recognized, either "homo_sapiens" or \
-            "mus_musculus" are supported. For other species type, \
-                please download the mti data file and update mti_loader function')
+        raise UsageError('Type of species not recognized, either "homo_sapiens" or '
+                         '"mus_musculus" are supported. For other species type, '
+                         'please download the mti data file and update '
+                         'mti_loader function')
     return mti_data 
 
 
@@ -136,11 +164,16 @@ def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str,
         where columns are the spots and rows are gene reads.
 
     Args:
-        matrix_mtx_file: path to matrix.mtx that was downloaded from visium website.
-        features_tsv_file: path to features.tsv that was downloaded from visium website.
-        barcodes_tsv_file: path to barcodes.tsv that was downloaded from visium website.
-        save_to_file: save generated data table to file at new_txt_file, default = False.
-        path_to_save: path to save the generated data table if save_to_file is True, default = None.
+        matrix_mtx_file: path to matrix.mtx 
+            that was downloaded from visium website.
+        features_tsv_file: path to features.tsv 
+            that was downloaded from visium website.
+        barcodes_tsv_file: path to barcodes.tsv 
+            that was downloaded from visium website.
+        save_to_file: save generated data table to file at new_txt_file, 
+            default = False.
+        path_to_save: path to save the generated data table 
+            if save_to_file is True, default = None.
 
     Returns:
         reads table.
@@ -185,13 +218,15 @@ def visium_loader(data_path: str) -> pd.DataFrame:
     matrix_mtx_file = os.path.join(counts_path, "matrix.mtx")
     features_tsv_file = os.path.join(counts_path, "features.tsv")
     barcodes_tsv_file = os.path.join(counts_path, "barcodes.tsv")
-    counts = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
+    counts = switch_10x_to_txt(matrix_mtx_file, 
+                               features_tsv_file, 
+                               barcodes_tsv_file
+                               )
 
     return counts
 
 
-def get_spatial_coors(data_path: str, counts: pd.DataFrame) \
-     -> pd.DataFrame:
+def get_spatial_coors(data_path: str, counts: pd.DataFrame) -> pd.DataFrame:
     """Loads spatial coordinates.
 
     Args:
@@ -206,19 +241,31 @@ def get_spatial_coors(data_path: str, counts: pd.DataFrame) \
 
     spatial_path = os.path.join(data_path, "spatial")
     try:
-        spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), 
-            index_col=0, sep=',', header='infer')
+        spatial_coors = pd.read_csv(
+            os.path.join(spatial_path, "tissue_positions_list.csv"), 
+            index_col=0, 
+            sep=',', 
+            header='infer'
+            )
         spatial_coors = spatial_coors.loc[list(counts)]
         spatial_coors = np.array(spatial_coors[['array_col','array_row']])
     except:
         try:
-            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions_list.csv"), 
-                index_col=0, sep=',',header=None) 
+            spatial_coors = pd.read_csv(
+                os.path.join(spatial_path, "tissue_positions_list.csv"), 
+                index_col=0, 
+                sep=',',
+                header=None
+                ) 
             spatial_coors = spatial_coors.loc[list(counts)]
             spatial_coors = np.array(spatial_coors[[3, 2]])
         except:
-            spatial_coors = pd.read_csv(os.path.join(spatial_path, "tissue_positions.csv"), 
-                index_col=0, sep=',', header='infer')
+            spatial_coors = pd.read_csv(
+                os.path.join(spatial_path, "tissue_positions.csv"), 
+                index_col=0, 
+                sep=',', 
+                header='infer'
+                )
             spatial_coors = spatial_coors.loc[list(counts)]
             spatial_coors = np.array(spatial_coors[['array_col','array_row']])
 
@@ -238,7 +285,7 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
         reads table with cells (columns) and genes (rows).
 
     Raises:
-        exception if no 'txt' or 'tsv' files are found 
+        UsageError: if no 'txt' or 'tsv' files are found 
     """
 
     logging.debug('Preprocessing scRNAseq data')
@@ -252,18 +299,22 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
             logging.info("Merging all %i .txt files", len_files)
             for file in txt_files[1:]:
                 counts_to_merge = pd.read_csv(file, delimiter="\t", index_col=0)        
-                counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
+                counts = counts.merge(
+                    counts_to_merge, left_index=True, right_index=True)        
     elif tsv_files:
-        counts = pd.read_csv(tsv_files[0], sep='\t', index_col=0, on_bad_lines='skip').T 
+        counts = pd.read_csv(
+            tsv_files[0], sep='\t', index_col=0, on_bad_lines='skip').T 
         len_files = len(tsv_files)
         if len_files > 1:
             logging.info("Merging all %i .tsv files", len_files)
             for file in tsv_files[1:]:
-                counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip').T 
-                counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
+                counts_to_merge = pd.read_csv(
+                    file, sep='\t', index_col=0, on_bad_lines='skip').T 
+                counts = counts.merge(
+                    counts_to_merge, left_index=True, right_index=True)        
     else:
-        logging.error('No \'txt\' or \'tsv\' files were found in %s', dataset_path)
-        raise Exception('No \'txt\' or \'tsv\' files were found in %s', dataset_path)
+        raise UsageError('No \'txt\' or \'tsv\' files were found in'
+                         ' %s', dataset_path)
     
     len_cols = len(counts.columns)
     logging.info('%s columns were detected', len_cols)
@@ -291,13 +342,16 @@ def scRNAseq_loader(data_path: str) -> pd.DataFrame:
     if file_name.endswith('.txt'):
         counts = pd.read_csv(file_name, delimiter="\t", index_col=0)        
     elif file_name.endswith('.tsv'):
-        counts = pd.read_csv(file_name, sep='\t', index_col=0, on_bad_lines='skip').T 
+        counts = pd.read_csv(
+            file_name, sep='\t', index_col=0, on_bad_lines='skip').T 
     else: #pkl file
         counts = pd.read_pickle(file_name)
     col_len = len(counts.columns)
     if col_len > 10000:
-        logging.info('Reads table is too big, having: %i columns, this might take too long to compute \
-            microRNA activity. Please consider sampling data up to 10K columns, by passing \'process\'=True', col_len)
+        logging.info('Reads table is too big, having: %i columns, this might '
+                     'take too long to compute microRNA activity. '
+                     'Please consider sampling data up to 10K columns, '
+                     'by passing \'process\'=True', col_len)
     return counts
 
 
@@ -319,15 +373,17 @@ def normalize_counts(counts: pd.DataFrame) -> pd.DataFrame:
     logging.debug('Normalizing reads table')
 
     counts_norm = counts.loc[counts.sum(axis=1) > 0]
-    counts_norm = counts_norm.divide(counts_norm.sum(), axis='columns').\
-        multiply(10000)
-    counts_norm = counts_norm.subtract(counts_norm.mean(axis=1), axis='index').\
-        divide(counts_norm.std(axis=1), axis='index')
+    counts_norm = counts_norm.divide(
+        counts_norm.sum(), axis='columns').multiply(10000)
+    counts_norm = counts_norm.subtract(
+        counts_norm.mean(axis=1), axis='index').divide(
+            counts_norm.std(axis=1), axis='index')
     return counts_norm
 
 
-def compute_mir_activity(counts: pd.DataFrame, miR_list: list, mti_data: pd.DataFrame, 
-    results_path: str, cpus: int, debug: bool = False) -> pd.DataFrame:
+def compute_mir_activity(counts: pd.DataFrame, miR_list: list, 
+    mti_data: pd.DataFrame, results_path: str, cpus: int, 
+    debug: bool = False) -> pd.DataFrame:
     """Computing microRNA activity.
 
     Multiprocessing of per cell/spot per microRNA computations.
@@ -351,11 +407,12 @@ def compute_mir_activity(counts: pd.DataFrame, miR_list: list, mti_data: pd.Data
 
     logging.debug('Computing activity map')
 
-    with mp.Pool(cpus) as pool:
-        iterable = [(cell, counts.loc[:, cell].sort_values(),
-                                     miR_list, mti_data, debug) for cell in list(counts)]
-        result_list = list(tqdm.tqdm(pool.istarmap(compute_stats_per_cell, iterable),
-                          total=len(iterable)))
+    with my_pool(cpus) as pool:
+        iterable = [(
+            cell, counts.loc[:, cell].sort_values(), 
+            miR_list, mti_data, debug) for cell in list(counts)]
+        result_list = list(tqdm.tqdm(
+            pool.istarmap(compute_stats_per_cell, iterable), total=len(iterable)))
 
     for result in result_list:
         cell = result[0]
@@ -374,7 +431,8 @@ def compute_mir_activity(counts: pd.DataFrame, miR_list: list, mti_data: pd.Data
 
 
 def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, 
-    mti_data: pd.DataFrame, debug: bool = False) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    mti_data: pd.DataFrame, debug: bool = False) -> Tuple[str, 
+    pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Computing microRNA activity per spot/cell.
 
     Using mHG test.
@@ -391,8 +449,8 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list,
         column id and microRNA activity results achived using mHG test.
 
     Raises:
-        only in debug mode, an exceptions is raised if no targets are \
-            found for a specific microRNA within the reads table
+        UsageError: if no targets are found for a specific microRNA 
+        within the reads table (only in debug mode)
     """
 
     logging.debug('Setting parameters for mHG package')
@@ -412,8 +470,9 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list,
             if sum(v) == 0: 
                 logging.debug('No targets found for %s', miR)
                 logging.debug('%s targets: %s ',miR, miR_targets)
-                logging.error('No targets were found for microRNA: ' + miR + '. please check that correct \'species\' flag was selected')
-                raise Exception('No targets were found for microRNA: ' + miR + '. please check that correct \'species\' flag was selected')
+                raise UsageError('No targets were found for microRNA: %s . '
+                                 'please check that correct \'species\' '
+                                 'flag was selected', miR)
         stat, cutoff, pval = xlmhg.xlmhg_test(v, X=X, L=L)
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
@@ -426,15 +485,16 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
     spots: int, results_path: str, dataset_name: str) -> pd.DataFrame:
     """Computes which microRNAs are the most active within the entire slide.
 
-    The value of each microRNA is the percentage of cells/spots \
-        for which it got a score lower than 'thresh'
+    The value of each microRNA is the percentage of cells/spots 
+    for which it got a score lower than 'thresh'
 
     Args:
         miR_activity_pvals: activity table per spot per microRNA.
-        thresh: used for filtering only microRNAs/spt that got a score lower than thresh, 
-            i.e. very active.
+        thresh: used for filtering only microRNAs/spt that got a score 
+            lower than thresh, i.e. very active.
         spots: number of spots.
-        results_path: where to save the sorted list of most highly expressed microRNA.
+        results_path: where to save the sorted list of most highly expressed 
+            microRNA.
         dataset_name: dataset name
     
     Returns: 
@@ -442,13 +502,15 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
             over the extire slide. 
     """
 
-    logging.info('Computing which microRNAs are the most active within the entire slide.')
+    logging.info(
+        'Computing which microRNAs are the most active within the entire slide.')
 
-    mir_expression = miR_activity_pvals[miR_activity_pvals < thresh].\
-        count(axis=1).sort_values(ascending = False)
+    mir_expression = miR_activity_pvals[
+        miR_activity_pvals < thresh].count(axis=1).sort_values(ascending = False)
     mir_expression = mir_expression / spots
-    mir_expression.to_csv(results_path + '/sorted_mirs_by_activity_th' + str(thresh) \
-        + '_' + dataset_name + '.csv')
+    mir_expression.to_csv(
+        results_path + '/sorted_mirs_by_activity_th_' + 
+        str(thresh) + '_' + dataset_name + '.csv', header=False)
 
     return mir_expression
 
@@ -481,7 +543,8 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
         plt.scatter(spatial_coors[:, 0], spatial_coors[:, 1], c=log10_pvals, 
             vmin=np.min(log10_pvals), vmax=np.max(log10_pvals))
         plt.gca().invert_yaxis()
-        plt.colorbar(extend='max').set_label('p-value (-log10)', rotation=270, labelpad=20)
+        plt.colorbar(extend='max').set_label(
+            'p-value (-log10)', rotation=270, labelpad=20)
         plt.title(miR + ' activity map', fontsize=14)
         plt.savefig(path_to_plot)
         logging.debug('Figure generated for %s, saved in %s', miR, path_to_plot)
