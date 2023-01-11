@@ -16,15 +16,15 @@ _SUPPORTED_DRAW = frozenset({
   _DRAW_TOP_10
 })
 
-# MicroRNA prefixes for the supported species
+# MicroRNA prefixes for the supported species.
 _HOMO_SAPIENS_PREFIX = 'hsa'
 _MUS_MUSCULUS_PREFIX = 'mmu'
 
-# Supported data types
+# Supported data types.
 _DATA_TYPE_SPATIAL = 'spatial'
 _DATA_TYPE_SINGLE_CELL = 'scRNAseq'
 
-# Spatial related folders
+# Spatial related folders.
 _SPATIAL_FOLDER_1 = 'spatial'
 _SPATIAL_FOLDER_2 = 'filtered_feature_bc_matrix'
 
