@@ -1,4 +1,4 @@
-# Supported species
+# Supported species.
 _SPECIES_HOMO_SAPIENS = 'homo_sapiens'
 _SPECIES_MUS_MUSCULUS = 'mus_musculus'
 _SUPPORTED_SPECIES = frozenset({
