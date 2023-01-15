@@ -515,10 +515,13 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
         v = np.uint8([int(g in miR_targets) for g in ranked_list])
         if debug:
             if sum(v) == 0: 
+                common_target_reads = set(miR_targets) & set(ranked_list)
                 logging.debug('No targets found for %s' %miR)
                 logging.debug('%s targets: %s ' %(miR, miR_targets))
                 raise UsageError('No targets were found for microRNA: %s . please check that '
-                                 'correct \'species\' flag was selected' %miR)
+                                 'correct \'species\' flag was selected. The following '
+                                 'targets were found: %s. The following targets were found in the '
+                                 'reads table: %s' %(miR, miR_targets, common_target_reads))
         stat, cutoff, pval = xlmhg.xlmhg_test(v, X=_MHG_X_PARAM, L=len(ranked))
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
