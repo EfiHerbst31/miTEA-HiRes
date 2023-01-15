@@ -115,8 +115,9 @@ def mir_data_loading(miR_list: Optional[list],
         UsageError if species doesn't match microRNAs provided in the list.
     '''
     mti_data = utils.mti_loader(species)
-    logging.debug('Loads microRNA list')
-    miR_list = list(miR_list) or list(set(mti_data['miRNA']))
+    logging.debug('Loading microRNA list')
+    miR_list = list(miR_list) if miR_list else list(set(mti_data['miRNA']))
+        
     logging.info('Number of microRNAs detected: %i',len(miR_list))
     logging.debug('MicroRNA list: %s', miR_list)
 
