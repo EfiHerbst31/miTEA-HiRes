@@ -32,3 +32,6 @@ _SPATIAL_FOLDERS = frozenset({
  _SPATIAL_FOLDER_1,
  _SPATIAL_FOLDER_2
 })
+
+# Default threshold used to determine if a microRNA is active or not.
+_ACTIVITY_THRESH = 0.00001

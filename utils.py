@@ -60,8 +60,10 @@ def check_data_type(data_path: str) -> str:
     counts_path = os.path.join(data_path, constants._SPATIAL_FOLDER_2)
     is_spatial = os.path.exists(counts_path)
     if is_spatial:
+        logging.info('Data type detected: %s', constants._DATA_TYPE_SPATIAL)
         return constants._DATA_TYPE_SPATIAL
     else:
+        logging.info('Data type detected: %s', constants._DATA_TYPE_SINGLE_CELL)
         return constants._DATA_TYPE_SINGLE_CELL
 
 def get_data_file(data_path: str, file_extension: str) -> Optional[str]:
@@ -77,11 +79,11 @@ def get_data_file(data_path: str, file_extension: str) -> Optional[str]:
     Raises:    
         UsageError: if more than one file was detected.
     '''
-    path_to_files = os.path.join(data_path, '*.%s' % file_extension)
+    path_to_files = os.path.join(data_path, '*.%s' %file_extension)
     files = glob.glob(path_to_files)
     if len(files) > 1:
         raise UsageError('There seem to be more than one %s file. '
-                         'please merge to a single file', file_extension)
+                         'please merge to a single file' %file_extension)
     return next(iter(files), None)
 
 def detect_data_file(data_path: str) -> str:
@@ -125,9 +127,10 @@ def mti_loader(species: str=constants._SPECIES_HOMO_SAPIENS) -> pd.DataFrame:
     Raises:
         UsageError: if species type is not recognized.
     '''
+    logging.debug('Loading microRNA target data')
     mti_loc = 'miRTarBase/release_8.0'
     mti_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), mti_loc)
-    logging.debug('mti data path: %s', mti_path)
+    logging.debug('mti data path: %s' %mti_path)
     logging.debug('Loading MTIs...')
     if species == constants._SPECIES_HOMO_SAPIENS:
         homo_file_path = os.path.join(mti_path, _HOMO_MTI_FILE)
@@ -138,7 +141,7 @@ def mti_loader(species: str=constants._SPECIES_HOMO_SAPIENS) -> pd.DataFrame:
     else:
         raise UsageError('Type of species not recognized, either %s are supported. '
                          'For other species type, please download the mti data file and '
-                         'update mti_loader function', ' or '.join(constants._SUPPORTED_SPECIES))
+                         'update mti_loader function' % ' or '.join(constants._SUPPORTED_SPECIES))
     return mti_data 
 
 
@@ -299,7 +302,7 @@ def get_spatial_coors(data_path: str, counts: pd.DataFrame) -> pd.DataFrame:
     if spatial_coors is not None:
         return spatial_coors
     else:
-        raise TypeError('Problem loading %s coordinates', constants._DATA_TYPE_SPATIAL)    
+        raise TypeError('Problem loading %s coordinates' %constants._DATA_TYPE_SPATIAL)    
 
 def load_merge_txt_files(txt_files: list) -> pd.DataFrame:
     '''
@@ -355,9 +358,9 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
     Raises:
         UsageError: if no 'txt' or 'tsv' files are found 
     '''
-    logging.debug('Preprocessing %s data', constants._DATA_TYPE_SINGLE_CELL)
-    path_to_txt = '%s/*.txt', data_path
-    path_to_tsv = '%s/*.tsv', data_path
+    logging.debug('Preprocessing %s data' %constants._DATA_TYPE_SINGLE_CELL)
+    path_to_txt = '%s/*.txt' %data_path
+    path_to_tsv = '%s/*.tsv' %data_path
     txt_files = glob.glob(path_to_txt)
     tsv_files = glob.glob(path_to_tsv)
     if txt_files:
@@ -365,12 +368,12 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
     elif tsv_files:
         counts = load_merge_tsv_files(tsv_files)
     else:
-        raise UsageError('No \'txt\' or \'tsv\' files were found in %s', data_path)
+        raise UsageError('No \'txt\' or \'tsv\' files were found in %s' %data_path)
     
     len_cols = len(counts.columns)
-    logging.info('%s columns were detected', len_cols)
+    logging.info('%s columns were detected' %len_cols)
     if len_cols > _MAX_COLS:
-        logging.info('Sampling %i columns', _MAX_COLS)
+        logging.info('Sampling %i columns' %_MAX_COLS)
         counts = counts.sample(n=_MAX_COLS, axis='columns')
     
     path_to_pkl = os.path.join(data_path, dataset_name + '.pkl')
@@ -387,7 +390,7 @@ def scRNAseq_loader(data_path: str) -> pd.DataFrame:
     Returns:
         Reads table with cells (columns) and genes (rows).
     '''
-    logging.debug('Loading %s data', constants._DATA_TYPE_SINGLE_CELL)
+    logging.debug('Loading %s data' %constants._DATA_TYPE_SINGLE_CELL)
 
     file_name = detect_data_file(data_path)
     if file_name.endswith('.txt'):
@@ -437,7 +440,7 @@ def compute_mir_activity(counts: pd.DataFrame, miR_list: list,
     Using mHG test.
 
     Args:
-        counts: reads table.
+        counts: normalized reads table.
         miR_list: microRNAs to consider.
         mti_data: microRNA targets data.
         results_path: path to save results.
@@ -451,9 +454,9 @@ def compute_mir_activity(counts: pd.DataFrame, miR_list: list,
     miR_activity_pvals = pd.DataFrame(columns=list(counts), index=miR_list)
     miR_activity_cutoffs = pd.DataFrame(columns=list(counts), index=miR_list)
 
-    path_to_stats = '%s/activity_stats.csv', results_path
-    path_to_pvals = '%s/activity_pvals.csv', results_path
-    path_to_cutoffs = '%s/activity_cutoffs.csv', results_path
+    path_to_stats = ('%s/activity_stats.csv' %results_path)
+    path_to_pvals = ('%s/activity_pvals.csv' %results_path)
+    path_to_cutoffs = ('%s/activity_cutoffs.csv' %results_path)
 
     logging.debug('Computing activity map')
 
@@ -501,7 +504,7 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
         UsageError: if no targets are found for a specific microRNA 
         within the reads table (only in debug mode)
     '''
-    logging.debug('Computing statistics for %s ', cell)
+    logging.debug('Computing statistics for %s ' %cell)
 
     ranked_list = list(ranked.index)
     miR_activity_stats = []
@@ -512,10 +515,10 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
         v = np.uint8([int(g in miR_targets) for g in ranked_list])
         if debug:
             if sum(v) == 0: 
-                logging.debug('No targets found for %s', miR)
-                logging.debug('%s targets: %s ',miR, miR_targets)
+                logging.debug('No targets found for %s' %miR)
+                logging.debug('%s targets: %s ' %(miR, miR_targets))
                 raise UsageError('No targets were found for microRNA: %s . please check that '
-                                 'correct \'species\' flag was selected', miR)
+                                 'correct \'species\' flag was selected' %miR)
         stat, cutoff, pval = xlmhg.xlmhg_test(v, X=_MHG_X_PARAM, L=len(ranked))
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
@@ -544,8 +547,8 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
     '''
     logging.info('Computing which microRNAs are the most active within the entire slide.')
 
-    path_to_sorted_mirs = ('%s/sorted_mirs_by_activity_th_%i_%s.csv', 
-                           (results_path, thresh, dataset_name))
+    path_to_sorted_mirs = ('%s/sorted_mirs_by_activity_th_%i_%s.csv' 
+                          %(results_path, thresh, dataset_name))
     mir_expression = miR_activity_pvals[
         miR_activity_pvals < thresh].count(axis=1).sort_values(ascending=False)
     mir_expression = mir_expression / spots
@@ -576,10 +579,10 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
         os.makedirs(results_path_figures)
 
     for miR in miR_list_figures:
-        plot_title = '%s activity map', miR
+        plot_title = '%s activity map' %miR
         pvals = miR_activity_pvals.loc[miR, :]
         log10_pvals = -np.log10(pvals)
-        path_to_plot = '%s/%s_%s.jpg' % (results_path_figures, dataset_name, miR)
+        path_to_plot = '%s/%s_%s.jpg' %(results_path_figures, dataset_name, miR)
         plt.figure(figsize=(10, 10))
         plt.scatter(spatial_coors[:, 0], spatial_coors[:, 1], c=log10_pvals, 
             vmin=np.min(log10_pvals), vmax=np.max(log10_pvals))
@@ -587,4 +590,4 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
         plt.colorbar(extend='max').set_label(plot_label, rotation=270, labelpad=20)
         plt.title(plot_title, fontsize=14)
         plt.savefig(path_to_plot)
-        logging.debug('Figure generated for %s, saved in %s', miR, path_to_plot)
+        logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_plot))
