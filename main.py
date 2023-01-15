@@ -114,7 +114,7 @@ def mir_data_loading(miR_list: Optional[list],
     Raises:
         UsageError if species doesn't match microRNAs provided in the list.
     '''
-    mti_data = utils.mti_loader(species)
+    mti_data = utils.mti_loader(species=species)
     logging.debug('Loading microRNA list')
     miR_list = list(miR_list) if miR_list else list(set(mti_data['miRNA']))
         
@@ -276,6 +276,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
         results_path, 
         miR_list=miR_list, 
         cpus=cpus, 
+        species=species,
         debug=debug)
 
     if data_type == constants._DATA_TYPE_SPATIAL:
