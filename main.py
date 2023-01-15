@@ -87,10 +87,7 @@ def data_handling(data_path: str, dataset_name: str, data_type: Optional[str],
         counts = utils.visium_loader(data_path)
     else:
         if preprocess:
-            try:
-                counts = utils.scRNAseq_loader(data_path)
-            except:
-                counts = utils.scRNAseq_preprocess_loader(dataset_name, data_path)
+            counts = utils.scRNAseq_preprocess_loader(dataset_name, data_path)
         else:
             counts = utils.scRNAseq_loader(data_path)
     

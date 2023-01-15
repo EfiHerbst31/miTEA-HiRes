@@ -403,7 +403,7 @@ def scRNAseq_loader(data_path: str) -> pd.DataFrame:
     if col_len > _MAX_COLS:
         logging.info('Reads table is too big, having: %i columns, this might take too long '
                      'compute microRNA activity. Please consider sampling data up to %i columns, '
-                     'by passing \'process\'=True', (col_len, _MAX_COLS))
+                     'by passing \'process\'=True' %(col_len, _MAX_COLS))
     return counts
 
 
