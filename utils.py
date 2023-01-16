@@ -114,7 +114,7 @@ def detect_data_file(data_path: str) -> str:
 
     if not data_file:
         raise UsageError('No \'txt\', \'tsv\' or \'mtx\' files were found in %s. '
-                         'Please try passing -process=True' %data_path)
+                         'Please try passing -preprocess=True' %data_path)
 
     return data_file
     
@@ -432,7 +432,7 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
         Reads table with cells (columns) and genes (rows).
 
     Raises:
-        UsageError: if no 'txt', 'tsv', or files are found 
+        UsageError: if no 'txt', 'tsv', or 'mtx' files are found 
     '''
     logging.debug('Preprocessing %s data' %constants._DATA_TYPE_SINGLE_CELL)
     path_to_gz = '%s/*.gz' %data_path
@@ -454,7 +454,7 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
         counts = load_merge_tsv_files(tsv_files)
     else:
         raise UsageError('No \'txt\', \'tsv\' or \'mtx\' files were found in %s. '
-                         'Please try passing -process=True' %data_path)
+                         'Please try passing -preprocess=True' %data_path)
     
     len_cols = len(counts.columns)
     logging.info('%s columns were detected' %len_cols)
