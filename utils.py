@@ -1,7 +1,9 @@
 import csv
 import glob
+import gzip
 import multiprocessing.pool as mp
 import os
+import shutil
 from typing import Optional, Tuple
 
 from absl import logging
@@ -18,6 +20,9 @@ _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MAX_COLS = 10000
 _MHG_X_PARAM = 1
+_10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
+_10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
+
 
 class MyPool(mp.Pool):
     '''Class extending multiprocessing.pool.Pool with starmap method that can work with tqdm.'''
@@ -108,7 +113,8 @@ def detect_data_file(data_path: str) -> str:
     )
 
     if not data_file:
-        raise UsageError('No pkl, txt or tsv data files were detected in: ', data_path) 
+        raise UsageError('No \'txt\', \'tsv\' or \'mtx\' files were found in %s. '
+                         'Please try passing -process=True' %data_path)
 
     return data_file
     
@@ -342,6 +348,53 @@ def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
     return counts     
 
+def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
+    '''
+    Loads and merges 10x files.
+
+    Assuming there are three files for merge: xxx_barcodes.tsv, xxx_genes.tsv, xxx*.mtx
+
+    Args:
+        mtx_files: list of detected mtx files.
+
+    Returns:
+        counts: merged data.
+    '''
+    files_prefix = '_'.join(mtx_files[0].split('/')[-1].split('_')[:-1])
+    file_path = '/'.join(mtx_files[0].split('/')[:-1])
+    matrix_mtx_file = mtx_files[0]
+    features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
+    barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
+    counts = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
+
+    len_files = len(mtx_files)
+    if len_files > 1:
+        logging.info('Merging all %i 10X files', len_files)
+        for file in mtx_files[1:]:
+            files_prefix = '_'.join(file.split('/')[-1].split('_')[:-1])
+            matrix_mtx_file = file
+            features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
+            barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
+            counts_to_merge = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
+            counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
+    return counts     
+
+def uzip_files(gz_files: list) -> None:
+    '''If '.gz' files are found, unzip them all.
+
+    Args:
+        gz_files: files to unzip
+    
+    Returns:
+        None
+    '''
+
+    for file in gz_files:
+        output_path = file[:-3]
+        with gzip.open(file,"rb") as f_in, open(output_path,"wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+
 def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFrame:
     '''Preprocesses and loads scRNAseq data.
 
@@ -356,19 +409,29 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
         Reads table with cells (columns) and genes (rows).
 
     Raises:
-        UsageError: if no 'txt' or 'tsv' files are found 
+        UsageError: if no 'txt', 'tsv', or files are found 
     '''
     logging.debug('Preprocessing %s data' %constants._DATA_TYPE_SINGLE_CELL)
+    path_to_gz = '%s/*.gz' %data_path
+    gz_files = glob.glob(path_to_gz)
+    if gz_files:
+        logging.info('Unzipping all files')
+        uzip_files(gz_files)
     path_to_txt = '%s/*.txt' %data_path
     path_to_tsv = '%s/*.tsv' %data_path
+    path_to_mtx = '%s/*.mtx' %data_path
     txt_files = glob.glob(path_to_txt)
     tsv_files = glob.glob(path_to_tsv)
+    mtx_files = glob.glob(path_to_mtx)
     if txt_files:
         counts = load_merge_txt_files(txt_files)
+    elif mtx_files:
+        counts = load_merge_10x_files(mtx_files)
     elif tsv_files:
         counts = load_merge_tsv_files(tsv_files)
     else:
-        raise UsageError('No \'txt\' or \'tsv\' files were found in %s' %data_path)
+        raise UsageError('No \'txt\', \'tsv\' or \'mtx\' files were found in %s. '
+                         'Please try passing -process=True' %data_path)
     
     len_cols = len(counts.columns)
     logging.info('%s columns were detected' %len_cols)
