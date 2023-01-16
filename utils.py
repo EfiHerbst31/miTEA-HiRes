@@ -353,6 +353,7 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
     Loads and merges 10x files.
 
     Assuming there are three files for merge: xxx_barcodes.tsv, xxx_genes.tsv, xxx*.mtx
+    If needed, matrices are sampled during the process.
 
     Args:
         mtx_files: list of detected mtx files.
@@ -366,6 +367,11 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
     features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
     barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
     counts = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
+    len_cols = len(counts.columns)
+    logging.info('%s columns were detected' %len_cols)
+    if len_cols > _MAX_COLS:
+        logging.info('Sampling %i columns' %_MAX_COLS)
+        counts = counts.sample(n=_MAX_COLS, axis='columns')
 
     len_files = len(mtx_files)
     if len_files > 1:
@@ -376,7 +382,13 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
             features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
             barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
             counts_to_merge = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
+            len_cols = len(counts_to_merge.columns)
+            logging.info('%s columns were detected' %len_cols)
+            if len_cols > _MAX_COLS:
+                logging.info('Sampling %i columns' %_MAX_COLS)
+                counts_to_merge = counts_to_merge.sample(n=_MAX_COLS, axis='columns')
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
+
     return counts     
 
 def uzip_files(gz_files: list) -> None:
