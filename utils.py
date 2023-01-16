@@ -361,6 +361,9 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
 
     Returns:
         counts: merged data.
+
+    Raises:
+        MemoryError if there are too many files to handle
     '''
     files_prefix = '_'.join(mtx_files[0].split('/')[-1].split('_')[:-1])
     file_path = '/'.join(mtx_files[0].split('/')[:-1])
@@ -377,20 +380,24 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
         counts = counts.sample(n=relative_sampling, axis='columns')
 
     if len_files > 1:
-        logging.info('Merging all %i 10X files', len_files)
-        for file in mtx_files[1:]:
-            files_prefix = '_'.join(file.split('/')[-1].split('_')[:-1])
-            matrix_mtx_file = file
-            features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
-            barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
-            counts_to_merge = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
-            len_cols = len(counts_to_merge.columns)
-            logging.info('%s columns were detected' %len_cols)
-            if len_cols > relative_sampling:
-                logging.info('Sampling %i columns' %relative_sampling)
-                counts_to_merge = counts_to_merge.sample(n=relative_sampling, axis='columns')
-            counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
-
+        try:
+            logging.info('Merging all %i 10X files', len_files)
+            for file in mtx_files[1:]:
+                files_prefix = '_'.join(file.split('/')[-1].split('_')[:-1])
+                matrix_mtx_file = file
+                print(matrix_mtx_file)
+                features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
+                barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
+                counts_to_merge = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
+                len_cols = len(counts_to_merge.columns)
+                logging.info('%s columns were detected' %len_cols)
+                if len_cols > relative_sampling:
+                    logging.info('Sampling %i columns' %relative_sampling)
+                    counts_to_merge = counts_to_merge.sample(n=relative_sampling, axis='columns')
+                counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
+        except:
+            raise MemoryError('Too many files to load, please try '
+                              'removing some files or allocate more memory')
     return counts     
 
 def uzip_files(gz_files: list) -> None:
