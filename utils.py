@@ -168,7 +168,7 @@ def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str,
         Reads table.
     '''
     logging.debug('Converting visium data to reads table')
-
+    print(matrix_mtx_file)
     the_matrix = scipy.io.mmread(matrix_mtx_file).todense()
 
     with open(features_tsv_file) as fd:
