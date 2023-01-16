@@ -353,7 +353,8 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
     Loads and merges 10x files.
 
     Assuming there are three files for merge: xxx_barcodes.tsv, xxx_genes.tsv, xxx*.mtx
-    If needed, matrices are sampled during the process.
+    If needed, matrices are sampled during the process, so that maximum 10K columns are 
+    left at the end. Each reads table is sampled with 10K/num_of_tables cells.
 
     Args:
         mtx_files: list of detected mtx files.
@@ -370,7 +371,7 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
     len_cols = len(counts.columns)
     len_files = len(mtx_files)
     logging.info('%s columns were detected' %len_cols)
-    relative_sampling = _MAX_COLS/len_files
+    relative_sampling = int(_MAX_COLS/len_files)
     if len_cols > relative_sampling:
         logging.info('Sampling %i columns' %relative_sampling)
         counts = counts.sample(n=relative_sampling, axis='columns')
