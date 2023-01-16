@@ -21,6 +21,7 @@ _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MAX_COLS = 10000
 _MHG_X_PARAM = 1
+_MHG_MAX_GENES = 65536
 _10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
 _10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
 
@@ -606,6 +607,10 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     miR_activity_stats = []
     miR_activity_pvals = []
     miR_activity_cutoffs = []
+    len_ranked = len(ranked)
+    if len_ranked > _MHG_MAX_GENES:
+        ranked_list = ranked_list[:_MHG_MAX_GENES]
+        len_ranked = len(ranked)
     for miR in miR_list:
         miR_targets = list(mti_data[mti_data['miRNA'] == miR]['Target Gene'])
         v = np.uint8([int(g in miR_targets) for g in ranked_list])
@@ -615,7 +620,7 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
                 logging.debug('No targets were found for microRNA: %s . please check that '
                                  'correct \'species\' flag was selected. The following '
                                  'targets were found: %s. ' %(miR, miR_targets))
-        stat, cutoff, pval = xlmhg.xlmhg_test(v, X=_MHG_X_PARAM, L=len(ranked))
+        stat, cutoff, pval = xlmhg.xlmhg_test(v, X=_MHG_X_PARAM, L=len_ranked)
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
         miR_activity_pvals.append(pval)
