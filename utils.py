@@ -21,7 +21,7 @@ _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MAX_COLS = 10000
 _MHG_X_PARAM = 1
-_MHG_MAX_GENES = 65536
+_MHG_MAX_GENES = 65000
 _10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
 _10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
 
@@ -591,6 +591,8 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     Using mHG test.
     If no targets are found in the reads table for a particular microRNA, 
     the result will be p-value of 0 for all cells/spots.
+    If there are too many genes for the mHG test to handle, the list is cut to the maximum allowed, 
+    removing the highly expressed genes from the bottom of the list.
 
     Args:
         cell:  column id.
