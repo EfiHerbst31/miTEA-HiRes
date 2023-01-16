@@ -612,7 +612,7 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     len_ranked = len(ranked)
     if len_ranked > _MHG_MAX_GENES:
         ranked_list = ranked_list[:_MHG_MAX_GENES]
-        len_ranked = len(ranked)
+        len_ranked = len(ranked_list)
     for miR in miR_list:
         miR_targets = list(mti_data[mti_data['miRNA'] == miR]['Target Gene'])
         v = np.uint8([int(g in miR_targets) for g in ranked_list])
