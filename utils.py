@@ -339,12 +339,14 @@ def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
     Returns:
         counts: merged data.
     '''
-    counts = pd.read_csv(tsv_files[0], sep='\t', index_col=0, on_bad_lines='skip').T 
+    counts = pd.read_csv(tsv_files[0], sep='\t', index_col=0, on_bad_lines='skip')
+    # counts = pd.read_csv(tsv_files[0], sep='\t', index_col=0, on_bad_lines='skip').T 
     len_files = len(tsv_files)
     if len_files > 1:
         logging.info('Merging all %i .tsv files', len_files)
         for file in tsv_files[1:]:
-            counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip').T 
+            counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip')
+            # counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip').T 
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
     return counts     
 
@@ -480,7 +482,8 @@ def scRNAseq_loader(data_path: str) -> pd.DataFrame:
     if file_name.endswith('.txt'):
         counts = pd.read_csv(file_name, delimiter='\t', index_col=0)        
     elif file_name.endswith('.tsv'):
-        counts = pd.read_csv(file_name, sep='\t', index_col=0, on_bad_lines='skip').T 
+        counts = pd.read_csv(file_name, sep='\t', index_col=0, on_bad_lines='skip')
+        # counts = pd.read_csv(file_name, sep='\t', index_col=0, on_bad_lines='skip').T  
     else: #pkl file
         counts = pd.read_pickle(file_name)
     col_len = len(counts.columns)
