@@ -1,4 +1,5 @@
 import csv
+import gc
 import glob
 import gzip
 import multiprocessing.pool as mp
@@ -327,6 +328,8 @@ def load_merge_txt_files(txt_files: list) -> pd.DataFrame:
         for file in txt_files[1:]:
             counts_to_merge = pd.read_csv(file, delimiter='\t', index_col=0)        
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)   
+            del counts_to_merge
+            gc.collect()
     return counts     
 
 def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
@@ -348,6 +351,9 @@ def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
             counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip')
             # counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip').T 
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
+            del counts_to_merge
+            gc.collect()
+
     return counts     
 
 def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
@@ -397,6 +403,8 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
                     logging.info('Sampling %i columns' %relative_sampling)
                     counts_to_merge = counts_to_merge.sample(n=relative_sampling, axis='columns')
                 counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
+                del counts_to_merge
+                gc.collect()
         except:
             raise MemoryError('Too many files to load, please try '
                               'removing some files or allocate more memory')
