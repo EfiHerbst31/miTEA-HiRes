@@ -187,6 +187,11 @@ def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str,
 
     if save_to_file:
         data.to_csv(path_to_save, sep='\t')
+    
+    del the_matrix
+    del genes
+    del cells
+    gc.collect()
 
     return data
 
