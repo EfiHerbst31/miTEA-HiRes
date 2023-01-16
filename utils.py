@@ -368,12 +368,13 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
     barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
     counts = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
     len_cols = len(counts.columns)
-    logging.info('%s columns were detected' %len_cols)
-    if len_cols > _MAX_COLS:
-        logging.info('Sampling %i columns' %_MAX_COLS)
-        counts = counts.sample(n=_MAX_COLS, axis='columns')
-
     len_files = len(mtx_files)
+    logging.info('%s columns were detected' %len_cols)
+    relative_sampling = _MAX_COLS/len_files
+    if len_cols > relative_sampling:
+        logging.info('Sampling %i columns' %relative_sampling)
+        counts = counts.sample(n=relative_sampling, axis='columns')
+
     if len_files > 1:
         logging.info('Merging all %i 10X files', len_files)
         for file in mtx_files[1:]:
@@ -384,9 +385,9 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
             counts_to_merge = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
             len_cols = len(counts_to_merge.columns)
             logging.info('%s columns were detected' %len_cols)
-            if len_cols > _MAX_COLS:
-                logging.info('Sampling %i columns' %_MAX_COLS)
-                counts_to_merge = counts_to_merge.sample(n=_MAX_COLS, axis='columns')
+            if len_cols > relative_sampling:
+                logging.info('Sampling %i columns' %relative_sampling)
+                counts_to_merge = counts_to_merge.sample(n=relative_sampling, axis='columns')
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
 
     return counts     
