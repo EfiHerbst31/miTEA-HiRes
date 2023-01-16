@@ -15,6 +15,7 @@ import utils
 
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=Warning)
 
 FLAGS = flags.FLAGS
 
