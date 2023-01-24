@@ -1,5 +1,4 @@
 import csv
-import gc
 import glob
 import gzip
 import multiprocessing.pool as mp
@@ -8,9 +7,11 @@ import shutil
 from typing import Optional, Tuple
 
 from absl import logging
+import anndata as ad
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scanpy as sc
 import scipy.io
 import tqdm    
 import xlmhg
@@ -21,7 +22,6 @@ _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MAX_COLS = 10000
 _MHG_X_PARAM = 1
-_MHG_MAX_GENES = 65000
 _10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
 _10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
 
@@ -152,6 +152,50 @@ def mti_loader(species: str=constants._SPECIES_HOMO_SAPIENS) -> pd.DataFrame:
                          'update mti_loader function' % ' or '.join(constants._SUPPORTED_SPECIES))
     return mti_data 
 
+def switch_10x_to_txt_sc(matrix_mtx_file: str, features_tsv_file: str, 
+    barcodes_tsv_file: str, sample: int=None, save_to_file: bool=False, 
+    path_to_save: str=None) -> pd.DataFrame:
+    '''Converts single cell data to reads table where columns are the cells and rows are gene reads.
+        Performs sampling if sample is not None.
+
+    Args:
+        matrix_mtx_file: path to matrix.mtx.
+        features_tsv_file: path to features.tsv.
+        barcodes_tsv_file: path to barcodes.tsv.
+        sample: column sample size, default = None.
+        save_to_file: save generated data table to file at new_txt_file, default = False.
+        path_to_save: path to save the generated data table if save_to_file is True, default = None.
+
+    Returns:
+        Reads table.
+    '''
+    logging.debug('Converting visium data to reads table')
+    data = ad.read_mtx(matrix_mtx_file, dtype='int32').T
+
+    with open(features_tsv_file) as fd:
+        rd = csv.reader(fd, delimiter='\t', quotechar='"')
+        genes = []
+        for row in rd:
+            genes.append(row[1])
+
+    with open(barcodes_tsv_file) as fd:
+        rd = csv.reader(fd, delimiter='\t', quotechar='"')
+        cells = []
+        for row in rd:
+            cells.append(row[0])
+
+    data.obs = pd.DataFrame(index=cells)
+    data.var = pd.DataFrame(index=genes)
+    if sample is not None and data.n_obs > sample:
+        sc.pp.subsample(data, n_obs=sample)
+    data = data.T
+    data = data.to_df()
+
+    if save_to_file:
+        data.to_csv(path_to_save, sep='\t')
+
+    return data
+
 
 def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str, 
     barcodes_tsv_file: str, save_to_file: bool=False, 
@@ -169,7 +213,6 @@ def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str,
         Reads table.
     '''
     logging.debug('Converting visium data to reads table')
-    print(matrix_mtx_file)
     the_matrix = scipy.io.mmread(matrix_mtx_file).todense()
 
     with open(features_tsv_file) as fd:
@@ -189,11 +232,6 @@ def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str,
     if save_to_file:
         data.to_csv(path_to_save, sep='\t')
     
-    del the_matrix
-    del genes
-    del cells
-    gc.collect()
-
     return data
 
 
@@ -334,8 +372,6 @@ def load_merge_txt_files(txt_files: list) -> pd.DataFrame:
         for file in txt_files[1:]:
             counts_to_merge = pd.read_csv(file, delimiter='\t', index_col=0)        
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)   
-            del counts_to_merge
-            gc.collect()
     return counts     
 
 def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
@@ -357,8 +393,6 @@ def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
             counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip')
             # counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip').T 
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
-            del counts_to_merge
-            gc.collect()
 
     return counts     
 
@@ -366,54 +400,47 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
     '''
     Loads and merges 10x files.
 
-    Assuming there are three files for merge: xxx_barcodes.tsv, xxx_genes.tsv, xxx*.mtx
+    Assuming there are three files for merge: xxx_barcodes.tsv, xxx_genes.tsv, xxx*.mtx.
     If needed, matrices are sampled during the process, so that maximum 10K columns are 
     left at the end. Each reads table is sampled with 10K/num_of_tables cells.
+    If duplicated genes are found they are discarded.
+    Inner merge is done if there are multiple files.
 
     Args:
         mtx_files: list of detected mtx files.
 
     Returns:
         counts: merged data.
-
-    Raises:
-        MemoryError if there are too many files to handle
     '''
     files_prefix = '_'.join(mtx_files[0].split('/')[-1].split('_')[:-1])
     file_path = '/'.join(mtx_files[0].split('/')[:-1])
+    len_files = len(mtx_files)
     matrix_mtx_file = mtx_files[0]
+    relative_sampling = int(_MAX_COLS/len_files)
     features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
     barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
-    counts = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
-    len_cols = len(counts.columns)
-    len_files = len(mtx_files)
-    logging.info('%s columns were detected' %len_cols)
-    relative_sampling = int(_MAX_COLS/len_files)
-    if len_cols > relative_sampling:
-        logging.info('Sampling %i columns' %relative_sampling)
-        counts = counts.sample(n=relative_sampling, axis='columns')
+    counts = switch_10x_to_txt_sc(
+        matrix_mtx_file, 
+        features_tsv_file, 
+        barcodes_tsv_file, 
+        sample=relative_sampling)
+    counts = counts[~counts.index.duplicated(keep='first')]
 
     if len_files > 1:
-        try:
-            logging.info('Merging all %i 10X files', len_files)
-            for file in mtx_files[1:]:
-                files_prefix = '_'.join(file.split('/')[-1].split('_')[:-1])
-                matrix_mtx_file = file
-                print(matrix_mtx_file)
-                features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
-                barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
-                counts_to_merge = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
-                len_cols = len(counts_to_merge.columns)
-                logging.info('%s columns were detected' %len_cols)
-                if len_cols > relative_sampling:
-                    logging.info('Sampling %i columns' %relative_sampling)
-                    counts_to_merge = counts_to_merge.sample(n=relative_sampling, axis='columns')
-                counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
-                del counts_to_merge
-                gc.collect()
-        except:
-            raise MemoryError('Too many files to load, please try '
-                              'removing some files or allocate more memory')
+        logging.info('Merging all %i mtx files', len_files)
+        for file in mtx_files[1:]:
+            files_prefix = '_'.join(file.split('/')[-1].split('_')[:-1])
+            matrix_mtx_file = file
+            features_tsv_file = os.path.join(
+                file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
+            barcodes_tsv_file = os.path.join(
+                file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
+            counts_to_merge = switch_10x_to_txt_sc(
+                matrix_mtx_file, features_tsv_file, barcodes_tsv_file, sample=relative_sampling)
+            logging.debug('%s columns were detected' %len(counts_to_merge.columns))
+            counts_to_merge = counts_to_merge[~counts_to_merge.index.duplicated(keep='first')]
+            counts = pd.merge(
+                counts, counts_to_merge, left_index=True, right_index=True, copy=False)
     return counts     
 
 def uzip_files(gz_files: list) -> None:
@@ -471,8 +498,8 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
                          'Please try passing -preprocess=True' %data_path)
     
     len_cols = len(counts.columns)
-    logging.info('%s columns were detected' %len_cols)
     if len_cols > _MAX_COLS:
+        logging.info('%s columns were detected' %len_cols)
         logging.info('Sampling %i columns' %_MAX_COLS)
         counts = counts.sample(n=_MAX_COLS, axis='columns')
     
@@ -610,9 +637,6 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     miR_activity_pvals = []
     miR_activity_cutoffs = []
     len_ranked = len(ranked)
-    if len_ranked > _MHG_MAX_GENES:
-        ranked_list = ranked_list[:_MHG_MAX_GENES]
-        len_ranked = len(ranked_list)
     for miR in miR_list:
         miR_targets = list(mti_data[mti_data['miRNA'] == miR]['Target Gene'])
         v = np.uint8([int(g in miR_targets) for g in ranked_list])
