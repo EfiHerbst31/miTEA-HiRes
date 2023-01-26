@@ -610,7 +610,6 @@ def compute_mir_activity(counts: pd.DataFrame, miR_list: list,
 
     return miR_activity_pvals
 
-
 def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_data: pd.DataFrame, 
     debug: bool=False) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     '''Computing microRNA activity per spot/cell.
