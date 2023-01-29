@@ -204,20 +204,22 @@ def mir_post_processing(data_path: str, counts_norm: pd.DataFrame, miR_activity_
     logging.info('Generating activity map figures')
     spatial_coors = utils.get_spatial_coors(data_path, counts_norm)
     spots = spatial_coors.shape[0]
+    mir_activity_list = utils.sort_activity_spatial(
+            miR_activity_pvals, thresh, spots, results_path, dataset_name)
     if miR_figures == constants._DRAW_ALL or len(miR_list) <= 10:
         miR_list_figures = miR_list
     elif miR_figures == constants._DRAW_TOP_10:
-        mir_activity = utils.sort_activity_spatial(
-            miR_activity_pvals, thresh, spots, results_path, dataset_name)
-        miR_list_figures = mir_activity.index[:10].tolist()
-        logging.debug('Figures are produced for the following microRNAs: %s', miR_list_figures)
+        miR_list_figures = mir_activity_list.index[:10].tolist()
     else: #'bottom_10'
-        mir_activity = utils.sort_activity_spatial(
-            miR_activity_pvals, thresh, spots, results_path, dataset_name)
-        miR_list_figures = mir_activity.index[-10:].tolist()
-        logging.debug('Figures are produced for the following microRNAs: %s', miR_list_figures)
+        miR_list_figures = mir_activity_list.index[-10:].tolist()
+    logging.debug('Figures are produced for the following microRNAs: %s', miR_list_figures)
     utils.produce_spatial_maps(
-        miR_list_figures, miR_activity_pvals, spatial_coors, results_path, dataset_name)
+        miR_list_figures, 
+        miR_activity_pvals, 
+        spatial_coors, 
+        results_path, 
+        dataset_name, 
+        mir_activity_list)
 
 def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: Optional[int],
     results_path: Optional[str], species: Optional[str]=constants._SPECIES_HOMO_SAPIENS,  

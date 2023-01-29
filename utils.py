@@ -673,19 +673,21 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
     '''
     logging.info('Computing which microRNAs are the most active within the entire slide.')
 
-    path_to_sorted_mirs = ('%s/sorted_mirs_by_activity_th_%i_%s.csv' 
-                          %(results_path, thresh, dataset_name))
     mir_expression = miR_activity_pvals[
         miR_activity_pvals < thresh].count(axis=1).sort_values(ascending=False)
     mir_expression = mir_expression / spots
-    mir_expression.to_csv(path_to_sorted_mirs, header=False)
+    mir_expression = pd.DataFrame(mir_expression)
+    mir_expression.columns = ['Activity Score']
+    mir_expression = mir_expression.rename_axis('MicroRNA')
 
     return mir_expression
 
 
 def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFrame, 
-    spatial_coors: pd.DataFrame, results_path: str, dataset_name: str):
+    spatial_coors: pd.DataFrame, results_path: str, dataset_name: str, 
+    mir_activity_list: pd.DataFrame):
     '''Produces a figure with activity map per microRNA in the list.
+       Produces also a html file with list of microRNAs, sorted by their overall activity.
 
     Args:
         miR_list_figures: list of microRNAs to produce figures for.
@@ -693,6 +695,7 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
         spatial_coors: spatial location of each spot.
         results_path: path to save figures.
         dataset_name: for plot name.
+        mir_activity_list: sorted list of most active microRNAs.
     
     Returns:
         None
@@ -700,6 +703,7 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
     logging.debug('Generating figures')
     results_path_figures = os.path.join(results_path, 'activity maps')
     plot_label = 'p-value (-log10)'
+    path_to_list = '%s/sorted_mir_by_activity.html' %results_path
 
     if not os.path.exists(results_path_figures):
         os.makedirs(results_path_figures)
@@ -708,7 +712,8 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
         plot_title = '%s activity map' %miR
         pvals = miR_activity_pvals.loc[miR, :]
         log10_pvals = -np.log10(pvals)
-        path_to_plot = '%s/%s_%s.jpg' %(results_path_figures, dataset_name, miR)
+        plot_file_name = '%s_%s.jpg' %(dataset_name, miR)
+        path_to_plot = '%s/%s' %(results_path_figures, plot_file_name)
         plt.figure(figsize=(10, 10))
         plt.scatter(spatial_coors[:, 0], spatial_coors[:, 1], c=log10_pvals, 
             vmin=np.min(log10_pvals), vmax=np.max(log10_pvals))
@@ -717,3 +722,8 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
         plt.title(plot_title, fontsize=14)
         plt.savefig(path_to_plot)
         logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_plot))
+        ref_path = '"./activity maps/%s"' %plot_file_name 
+        index_rename = '<a href=%s target="_blank">%s</a>' %(ref_path, miR)
+        mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
+    mir_activity_list = mir_activity_list.reset_index()
+    mir_activity_list.to_html(path_to_list, escape=False, index=False, justify='left')
