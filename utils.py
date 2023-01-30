@@ -187,7 +187,9 @@ def switch_10x_to_txt_sc(matrix_mtx_file: str, features_tsv_file: str,
     data.obs = pd.DataFrame(index=cells)
     data.var = pd.DataFrame(index=genes)
     if sample is not None and data.n_obs > sample:
-        sc.pp.subsample(data, n_obs=sample)
+        rng = np.random.default_rng(seed=None)
+        rand = rng.integers(0,100,1)[0]
+        sc.pp.subsample(data, n_obs=sample, random_state=rand)
     data = data.T
     data = data.to_df()
 
