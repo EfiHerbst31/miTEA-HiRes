@@ -170,7 +170,7 @@ def mir_data_loading(miR_list: Optional[list],
     Raises:
         UsageError if species doesn't match microRNAs provided in the list.
     '''
-    mti_data = utils.mti_loader(species=species)
+    mti_data = mti_loader(species=species)
     logging.debug('Loading microRNA list')
     miR_list = list(miR_list) if miR_list else list(set(mti_data['miRNA']))
         
@@ -179,11 +179,11 @@ def mir_data_loading(miR_list: Optional[list],
 
     if  species == constants._SPECIES_HOMO_SAPIENS and \
         constants._HOMO_SAPIENS_PREFIX not in miR_list[0]:
-        raise utils.UsageError('species is %s but some of the microRNAs in the list do not '
+        raise UsageError('species is %s but some of the microRNAs in the list do not '
                                'belong to humans', constants._SPECIES_HOMO_SAPIENS)
     elif species == constants._SPECIES_MUS_MUSCULUS and \
         constants._MUS_MUSCULUS_PREFIX not in miR_list[0]:
-        raise utils.UsageError('species is %s but some of the microRNAs in the list do not '
+        raise UsageError('species is %s but some of the microRNAs in the list do not '
                                'belong to mice', constants._SPECIES_MUS_MUSCULUS)
     else:
         logging.debug('Species match microRNAs in the list')
