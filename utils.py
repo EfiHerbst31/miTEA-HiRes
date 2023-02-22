@@ -693,12 +693,13 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
 
     return cell, miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs
 
-def get_figure_list(miR_list: list, miR_figures: str) -> list:
+def get_figure_list(miR_list: list, miR_figures: str, mir_activity_list: pd.DataFrame) -> list:
     '''Checking which microRNAs to plot.
 
     Args:
         miR_list: list of microRNAs.
         miR_figures: which microRNAs the user would like to plot, default: top 10 most active. 
+        mir_activity_list: Sorted list of microRNAs according to their overall activity.
 
     Return:
         List of microRNA's to plot.

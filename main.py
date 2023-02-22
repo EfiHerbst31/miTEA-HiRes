@@ -230,7 +230,8 @@ def mir_post_processing_sc(data_path: str, counts: pd.DataFrame, miR_activity_pv
 
     miR_list_figures = utils.get_figure_list(
         miR_list,
-        miR_figures)
+        miR_figures,
+        mir_activity_list)
 
     utils.produce_sc_umaps(
         miR_list_figures, 
