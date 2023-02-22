@@ -22,6 +22,7 @@ _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MAX_COLS = 10000
 _MHG_X_PARAM = 1
+_NON_ACTIVE_THRESH = 1.5
 _10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
 _10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
 
@@ -151,6 +152,43 @@ def mti_loader(species: str=constants._SPECIES_HOMO_SAPIENS) -> pd.DataFrame:
                          'For other species type, please download the mti data file and '
                          'update mti_loader function' % ' or '.join(constants._SUPPORTED_SPECIES))
     return mti_data 
+
+def mir_data_loading(miR_list: Optional[list], 
+    species: Optional[str]=constants._SPECIES_HOMO_SAPIENS, 
+    debug: Optional[bool]=False) -> Tuple[pd.DataFrame, list]:
+    '''Loading microRNA target data.
+
+    Args:
+        miR_list: (optional) list of microRNAs to compute.
+        species: (optional) either 'homo_sapiens' (default) or 'mus_musculus' are supported. 
+        debug: (optional) if True, provides aditional information. Default=False.
+
+    Returns:
+        mti_data: microRNA targets data.
+        miR_list: microRNA list to compute.
+    
+    Raises:
+        UsageError if species doesn't match microRNAs provided in the list.
+    '''
+    mti_data = utils.mti_loader(species=species)
+    logging.debug('Loading microRNA list')
+    miR_list = list(miR_list) if miR_list else list(set(mti_data['miRNA']))
+        
+    logging.info('Number of microRNAs detected: %i',len(miR_list))
+    logging.debug('MicroRNA list: %s', miR_list)
+
+    if  species == constants._SPECIES_HOMO_SAPIENS and \
+        constants._HOMO_SAPIENS_PREFIX not in miR_list[0]:
+        raise utils.UsageError('species is %s but some of the microRNAs in the list do not '
+                               'belong to humans', constants._SPECIES_HOMO_SAPIENS)
+    elif species == constants._SPECIES_MUS_MUSCULUS and \
+        constants._MUS_MUSCULUS_PREFIX not in miR_list[0]:
+        raise utils.UsageError('species is %s but some of the microRNAs in the list do not '
+                               'belong to mice', constants._SPECIES_MUS_MUSCULUS)
+    else:
+        logging.debug('Species match microRNAs in the list')
+
+    return mti_data, miR_list
 
 def switch_10x_to_txt_sc(matrix_mtx_file: str, features_tsv_file: str, 
     barcodes_tsv_file: str, sample: int=None, save_to_file: bool=False, 
@@ -555,6 +593,7 @@ def normalize_counts(counts: pd.DataFrame) -> pd.DataFrame:
     counts_norm = counts.loc[counts.sum(axis=1) > 0]
     counts_norm = counts_norm.divide(
         counts_norm.sum(), axis='columns').multiply(10000)
+    counts_norm = counts_norm.fillna(0)
     counts_norm = counts_norm.subtract(
         counts_norm.mean(axis=1), axis='index').divide(
             counts_norm.std(axis=1), axis='index')
@@ -654,6 +693,25 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
 
     return cell, miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs
 
+def get_figure_list(miR_list: list, miR_figures: str) -> list:
+    '''Checking which microRNAs to plot.
+
+    Args:
+        miR_list: list of microRNAs.
+        miR_figures: which microRNAs the user would like to plot, default: top 10 most active. 
+
+    Return:
+        List of microRNA's to plot.
+    '''
+    if miR_figures == constants._DRAW_ALL or len(miR_list) <= 10:
+        miR_list_figures = miR_list
+    elif miR_figures == constants._DRAW_TOP_10:
+        miR_list_figures = mir_activity_list.index[:10].tolist()
+    else: #'bottom_10'
+        miR_list_figures = mir_activity_list.index[-10:].tolist()
+    logging.debug('Figures are produced for the following microRNAs: %s', miR_list_figures)
+
+    return miR_list_figures
 
 def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float, 
     spots: int, results_path: str, dataset_name: str) -> pd.DataFrame:
@@ -675,14 +733,14 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
     '''
     logging.info('Computing which microRNAs are the most active within the entire slide.')
 
-    mir_expression = miR_activity_pvals[
+    mir_activity_list = miR_activity_pvals[
         miR_activity_pvals < thresh].count(axis=1).sort_values(ascending=False)
-    mir_expression = mir_expression / spots
-    mir_expression = pd.DataFrame(mir_expression)
-    mir_expression.columns = ['Activity Score']
-    mir_expression = mir_expression.rename_axis('MicroRNA')
+    mir_activity_list = mir_activity_list / spots
+    mir_activity_list = pd.DataFrame(mir_activity_list)
+    mir_activity_list.columns = ['Activity Score']
+    mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
 
-    return mir_expression
+    return mir_activity_list
 
 
 def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFrame, 
@@ -729,3 +787,138 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
         mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
     mir_activity_list = mir_activity_list.reset_index()
     mir_activity_list.to_html(path_to_list, escape=False, index=False, justify='left')
+
+def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame) -> sc.AnnData:
+    '''Computing UMAP based on gene counts, and enriching it with miR activity scores.
+
+    Args:
+        counts: reads table.
+        miR_activity_pvals: activity per spot per microRNA.
+
+    Returns:
+        Enriched counts table with umap and miR activity scores.
+    '''
+    logging.info('Normalizing gene expression.')
+    enriched_counts = sc.AnnData(counts.T)
+    sc.pp.filter_cells(enriched_counts, min_genes=200)
+    sc.pp.filter_genes(enriched_counts,min_cells=3)
+    sc.pp.calculate_qc_metrics(enriched_counts, percent_top=None, log1p=False, inplace=True)
+    upper_lim = np.quantile(enriched_counts.obs.n_genes_by_counts.values, .98)
+    lower_lim = np.quantile(enriched_counts.obs.n_genes_by_counts.values, .02)
+    enriched_counts = enriched_counts[
+        (enriched_counts.obs.n_genes_by_counts<upper_lim)&
+        (enriched_counts.obs.n_genes_by_counts>lower_lim)]
+    sc.pp.normalize_total(enriched_counts, target_sum=1e4)
+    sc.pp.log1p(enriched_counts)
+    sc.pp.highly_variable_genes(enriched_counts, min_mean=0.0125, max_mean=3, min_disp=0.5)
+    enriched_counts.raw=enriched_counts
+    enriched_counts = enriched_counts[:, enriched_counts.var.highly_variable]
+    sc.pp.regress_out(enriched_counts, ['total_counts'])
+    sc.pp.scale(enriched_counts, max_value=10)
+    logging.info('Computing UMAP.')
+    sc.pp.neighbors(enriched_counts, n_neighbors=10, n_pcs=20, use_rep='X') 
+    sc.tl.umap(enriched_counts)
+    logging.info('Enriching with microRNA activity results.')
+    log10_pvals = -np.log10(miR_activity_pvals)
+    mir_for_merge = sc.AnnData(log10_pvals.T)
+    adatas = []
+    adatas.append(enriched_counts)
+    adatas.append(mir_for_merge)
+    adata_merge = ad.concat(adatas, axis=1, merge="unique")
+    return adata_merge
+
+def sort_activity_sc(miR_activity_pvals: pd.DataFrame, results_path: str, 
+    dataset_name: str) -> pd.DataFrame:
+    '''Sorts microRNA's by their overall activity.
+
+    Args:
+        miR_activity_pvals: activity table per spot per microRNA.
+        results_path: path to save figures.
+        dataset_name: for plot name.
+
+    Returns:
+        Sorted list of microRNA, from the most overall active to the least, over all cells. 
+    '''
+    logging.info('Sorting microRNAs by their overall activity levels.')
+    log10_pvals = -np.log10(miR_activity_pvals)
+    mir_activity_list = log10_pvals[
+        log10_pvals > _NON_ACTIVE_THRESH].mean(axis=1).sort_values(ascending=False)
+    mir_activity_list = pd.DataFrame(mir_activity_list)
+    mir_activity_list.columns = ['Activity Score']
+    mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
+    return mir_activity_list
+
+def produce_sc_umaps(miR_list_figures: list, enriched_counts: sc.AnnData, results_path: str, 
+    dataset_name: str, mir_activity_list: pd.DataFrame):
+    '''Produces UMAP figure with microRNA activity levels per microRNA in the list.
+       Produces also a html file with list of microRNAs, sorted by their overall activity.
+
+    Args:
+        miR_list_figures: list of microRNAs to produce figures for.
+        enriched_counts: enriched counts table with umap and miR activity scores.
+        results_path: path to save figures.
+        dataset_name: for plot name.
+        mir_activity_list: sorted list of most active microRNAs.
+    
+    Returns:
+        None
+    '''
+    logging.debug('Generating UMAP figures')
+    results_path_figures = os.path.join(results_path, 'activity maps')
+    path_to_list = '%s/sorted_mir_by_activity.html' %results_path
+
+    if not os.path.exists(results_path_figures):
+        os.makedirs(results_path_figures)
+
+    for miR in miR_list_figures:
+        plot_file_name = '%s_%s.jpg' %(dataset_name, miR)
+        path_to_plot = '%s/%s' %(results_path_figures, plot_file_name)
+        fig, ax = plt.subplots(figsize=(10, 10))
+        sc.pl.umap(enriched_counts, color=miR, title='%s activity (-log10)' %miR, show=False, ax=ax)
+        fig.savefig(path_to_plot)
+        logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_plot))
+        ref_path = '"./activity maps/%s"' %plot_file_name 
+        index_rename = '<a href=%s target="_blank">%s</a>' %(ref_path, miR)
+        mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
+    mir_activity_list = mir_activity_list.reset_index()
+    mir_activity_list.to_html(path_to_list, escape=False, index=False, justify='left')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

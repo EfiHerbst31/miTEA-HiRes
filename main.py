@@ -80,6 +80,7 @@ def data_handling(data_path: str, dataset_name: str, data_type: Optional[str],
 
     Returns:
         counts_norm: normalized reads table
+        counts: raw reads table
     '''
     if not data_type:
        data_type =  utils.check_data_type(data_path)
@@ -93,44 +94,7 @@ def data_handling(data_path: str, dataset_name: str, data_type: Optional[str],
             counts = utils.scRNAseq_loader(data_path)
     
     counts_norm = utils.normalize_counts(counts)
-    return counts_norm
-
-def mir_data_loading(miR_list: Optional[list], 
-    species: Optional[str]=constants._SPECIES_HOMO_SAPIENS, 
-    debug: Optional[bool]=False) -> Tuple[pd.DataFrame, list]:
-    '''Loading microRNA target data.
-
-    Args:
-        miR_list: (optional) list of microRNAs to compute.
-        species: (optional) either 'homo_sapiens' (default) or 'mus_musculus' are supported. 
-        debug: (optional) if True, provides aditional information. Default=False.
-
-    Returns:
-        mti_data: microRNA targets data.
-        miR_list: microRNA list to compute.
-    
-    Raises:
-        UsageError if species doesn't match microRNAs provided in the list.
-    '''
-    mti_data = utils.mti_loader(species=species)
-    logging.debug('Loading microRNA list')
-    miR_list = list(miR_list) if miR_list else list(set(mti_data['miRNA']))
-        
-    logging.info('Number of microRNAs detected: %i',len(miR_list))
-    logging.debug('MicroRNA list: %s', miR_list)
-
-    if  species == constants._SPECIES_HOMO_SAPIENS and \
-        constants._HOMO_SAPIENS_PREFIX not in miR_list[0]:
-        raise utils.UsageError('species is %s but some of the microRNAs in the list do not '
-                               'belong to humans', constants._SPECIES_HOMO_SAPIENS)
-    elif species == constants._SPECIES_MUS_MUSCULUS and \
-        constants._MUS_MUSCULUS_PREFIX not in miR_list[0]:
-        raise utils.UsageError('species is %s but some of the microRNAs in the list do not '
-                               'belong to mice', constants._SPECIES_MUS_MUSCULUS)
-    else:
-        logging.debug('Species match microRNAs in the list')
-
-    return mti_data, miR_list
+    return counts_norm, counts
 
 def computing_mir_activity(counts_norm: pd.DataFrame, results_path: str, miR_list: Optional[list], 
     cpus: Optional[int], species: Optional[str]=constants._SPECIES_HOMO_SAPIENS, 
@@ -151,7 +115,7 @@ def computing_mir_activity(counts_norm: pd.DataFrame, results_path: str, miR_lis
     cpus = cpus or mp.cpu_count()
     logging.info('Using %i cpus', cpus)
 
-    mti_data, miR_list = mir_data_loading(
+    mti_data, miR_list = utils.mir_data_loading(
         miR_list=miR_list, 
         species=species, 
         debug=debug)
@@ -169,7 +133,7 @@ def computing_mir_activity(counts_norm: pd.DataFrame, results_path: str, miR_lis
     return miR_list, miR_activity_pvals
 
 
-def mir_post_processing(data_path: str, counts_norm: pd.DataFrame, miR_activity_pvals: pd.DataFrame, 
+def mir_post_processing_spatial(data_path: str, counts_norm: pd.DataFrame, miR_activity_pvals: pd.DataFrame, 
     miR_list: list, results_path: str, dataset_name: str, data_type: Optional[str],
     miR_figures: Optional[str]=constants._DRAW_TOP_10, 
     thresh: Optional[float]=constants._ACTIVITY_THRESH) -> None:
@@ -204,15 +168,18 @@ def mir_post_processing(data_path: str, counts_norm: pd.DataFrame, miR_activity_
     logging.info('Generating activity map figures')
     spatial_coors = utils.get_spatial_coors(data_path, counts_norm)
     spots = spatial_coors.shape[0]
+
     mir_activity_list = utils.sort_activity_spatial(
-            miR_activity_pvals, thresh, spots, results_path, dataset_name)
-    if miR_figures == constants._DRAW_ALL or len(miR_list) <= 10:
-        miR_list_figures = miR_list
-    elif miR_figures == constants._DRAW_TOP_10:
-        miR_list_figures = mir_activity_list.index[:10].tolist()
-    else: #'bottom_10'
-        miR_list_figures = mir_activity_list.index[-10:].tolist()
-    logging.debug('Figures are produced for the following microRNAs: %s', miR_list_figures)
+            miR_activity_pvals, 
+            thresh, 
+            spots, 
+            results_path, 
+            dataset_name)
+
+    miR_list_figures = utils.get_figure_list(
+        miR_list,
+        miR_figures)
+
     utils.produce_spatial_maps(
         miR_list_figures, 
         miR_activity_pvals, 
@@ -220,6 +187,58 @@ def mir_post_processing(data_path: str, counts_norm: pd.DataFrame, miR_activity_
         results_path, 
         dataset_name, 
         mir_activity_list)
+
+def mir_post_processing_sc(data_path: str, counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame, 
+    miR_list: list, results_path: str, dataset_name: str, data_type: Optional[str],
+    miR_figures: Optional[str]=constants._DRAW_TOP_10) -> None:
+    '''Perfoms post processing on scRNAseq data.
+
+    Computes UMAP based on gene expression, sorts microRNAs by their overall level of activity, 
+    and plots UMAP according to user's requirement.
+    If there are <= 10  microRNAs, or the user wants plots for all microRNAs, 
+    the function produces activity maps for all microRNAs without sorting first.
+
+    Args:
+        data_path: path to data.
+        counts: raw reads table.
+        miR_activity_pvals: microRNA activity results per spot.
+        miR_list: list of microRNAs.
+        results_path: path to save results.
+        dataset_name: dataset name.         
+        data_type: (optional) data type 'spatial' or 'scRNAseq'.
+        miR_figures: which microRNAs to plot. 
+
+    Returns:
+        None.
+
+    Raises:
+        UsageError if spatial data was not found in data_path.
+    '''
+    if not data_type:
+       data_type =  utils.check_data_type(data_path)
+    if data_type is not constants._DATA_TYPE_SINGLE_CELL:
+        raise utils.UsageError('No scRNAseq data was found for post-processing in %s', data_path)
+    logging.info('Single cell post processing')
+    enriched_counts = utils.generate_umap(
+        counts, 
+        miR_activity_pvals)
+
+    mir_activity_list = utils.sort_activity_sc(
+            miR_activity_pvals, 
+            results_path, 
+            dataset_name)
+
+    miR_list_figures = utils.get_figure_list(
+        miR_list,
+        miR_figures)
+
+    utils.produce_sc_umaps(
+        miR_list_figures, 
+        enriched_counts,
+        results_path, 
+        dataset_name, 
+        mir_activity_list)
+
 
 def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: Optional[int],
     results_path: Optional[str], species: Optional[str]=constants._SPECIES_HOMO_SAPIENS,  
@@ -265,7 +284,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
     
     data_type = utils.check_data_type(data_path)
    
-    counts_norm = data_handling(
+    counts_norm, counts = data_handling(
         data_path, 
         dataset_name, 
         data_type=data_type, 
@@ -280,7 +299,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
         debug=debug)
 
     if data_type == constants._DATA_TYPE_SPATIAL:
-        mir_post_processing(
+        mir_post_processing_spatial(
             data_path, 
             counts_norm, 
             miR_activity_pvals, 
@@ -290,6 +309,17 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
             data_type=data_type,
             miR_figures=miR_figures, 
             thresh=thresh)
+    else:
+        mir_post_processing_sc(
+            data_path, 
+            counts, 
+            miR_activity_pvals, 
+            miR_list=miR_list, 
+            results_path=results_path, 
+            dataset_name=dataset_name,
+            data_type=data_type,
+            miR_figures=miR_figures)
+    logging.info('Done.')
 
 def main(argv):
     compute(
@@ -302,8 +332,7 @@ def main(argv):
         miR_figures=FLAGS.miR_figures,
         preprocess=FLAGS.preprocess, 
         thresh=FLAGS.thresh,
-        debug=FLAGS.debug
-        )
+        debug=FLAGS.debug)
 
 if __name__ == '__main__': 
     app.run(main)
