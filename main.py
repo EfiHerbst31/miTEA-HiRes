@@ -38,7 +38,11 @@ flags.DEFINE_string(
 flags.DEFINE_list(
     'miR_list', None, 
     ('Comma-separated list of microRNAs to compute. default: all microRNAs are computed.'
-     'Example use: --miR_list=hsa-miR-300,hsa-miR-6502-5p,hsa-miR-6727-3p'))
+     'Example use: -miR_list=hsa-miR-300,hsa-miR-6502-5p,hsa-miR-6727-3p'))
+flags.DEFINE_list(
+    'populations', None,
+    ('Comma-separated list of two population string identifiers embedded in cell id.' 
+    'default: None. Example use: -populations=[\'DESEASE_\',\'CONTROL_\']'))
 flags.DEFINE_boolean(
     'preprocess', False, 
     ('Performs additional preprocessing on %s data before computations, merges all '
@@ -63,7 +67,7 @@ flags.register_validator('miR_figures',
                          lambda value: value in constants._SUPPORTED_DRAW,
                          message=('Either %s are supported.',
                                   ' or '.join(constants._SUPPORTED_DRAW)))
-      
+
 flags.mark_flag_as_required('dataset_name')
 flags.mark_flag_as_required('data_path')
 
@@ -190,7 +194,7 @@ def mir_post_processing_spatial(data_path: str, counts_norm: pd.DataFrame, miR_a
 
 def mir_post_processing_sc(data_path: str, counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame, 
     miR_list: list, results_path: str, dataset_name: str, data_type: Optional[str],
-    miR_figures: Optional[str]=constants._DRAW_TOP_10) -> None:
+    miR_figures: Optional[str]=constants._DRAW_TOP_10, populations: Optional[list]=None) -> None:
     '''Perfoms post processing on scRNAseq data.
 
     Computes UMAP based on gene expression, sorts microRNAs by their overall level of activity, 
@@ -206,7 +210,8 @@ def mir_post_processing_sc(data_path: str, counts: pd.DataFrame, miR_activity_pv
         results_path: path to save results.
         dataset_name: dataset name.         
         data_type: (optional) data type 'spatial' or 'scRNAseq'.
-        miR_figures: which microRNAs to plot. 
+        miR_figures: (optional) which microRNAs to plot. 
+        populations: (optional) list of two population string identifiers embedded in cell id.
 
     Returns:
         None.
@@ -221,31 +226,33 @@ def mir_post_processing_sc(data_path: str, counts: pd.DataFrame, miR_activity_pv
     logging.info('Single cell post processing')
     enriched_counts = utils.generate_umap(
         counts, 
-        miR_activity_pvals)
+        miR_activity_pvals,
+        populations)
 
     mir_activity_list = utils.sort_activity_sc(
             miR_activity_pvals, 
-            results_path, 
-            dataset_name)
+            populations)
 
     miR_list_figures = utils.get_figure_list(
         miR_list,
         miR_figures,
         mir_activity_list)
 
-    utils.produce_sc_umaps(
+    utils.plot_sc(
         miR_list_figures, 
         enriched_counts,
         results_path, 
         dataset_name, 
-        mir_activity_list)
+        mir_activity_list,
+        miR_activity_pvals,
+        populations)
 
 
 def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: Optional[int],
     results_path: Optional[str], species: Optional[str]=constants._SPECIES_HOMO_SAPIENS,  
     miR_figures: Optional[str]=constants._DRAW_TOP_10, 
     preprocess: Optional[bool]=True, thresh: Optional[float]=constants._ACTIVITY_THRESH,
-    debug: Optional[bool]=False):
+    populations: Optional[list]=None, debug: Optional[bool]=False):
     '''Performing end-to-end microRNA activity map computation.
 
     Loading spatial/scRNAseq data and preprocessing if needed.
@@ -263,6 +270,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
         preprocess: (optional) if True, performing data preprocessing if data is too big or is
             composed of multiple files. If False, will not perform data preprocessing. 
         thresh: (optional) thresold to define what is considered active.
+        populations: (optional) list of two population string identifiers embedded in cell id.
         debug: (optional) if True, provides aditional information. Default=False.
 
     Returns:
@@ -319,7 +327,8 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
             results_path=results_path, 
             dataset_name=dataset_name,
             data_type=data_type,
-            miR_figures=miR_figures)
+            miR_figures=miR_figures,
+            populations=populations)
     logging.info('Done.')
 
 def main(argv):
@@ -333,6 +342,7 @@ def main(argv):
         miR_figures=FLAGS.miR_figures,
         preprocess=FLAGS.preprocess, 
         thresh=FLAGS.thresh,
+        populations=FLAGS.populations,
         debug=FLAGS.debug)
 
 if __name__ == '__main__': 

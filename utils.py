@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 import scipy.io
+from scipy.stats import ranksums
 import tqdm    
 import xlmhg
 
@@ -425,12 +426,14 @@ def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
         counts: merged data.
     '''
     counts = pd.read_csv(tsv_files[0], sep='\t', index_col=0, on_bad_lines='skip')
+    # remove after validation with other tsv's, making sure this is the right way
     # counts = pd.read_csv(tsv_files[0], sep='\t', index_col=0, on_bad_lines='skip').T 
     len_files = len(tsv_files)
     if len_files > 1:
         logging.info('Merging all %i .tsv files', len_files)
         for file in tsv_files[1:]:
             counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip')
+            # remove after validation with other tsv's, making sure this is the right way
             # counts_to_merge = pd.read_csv(file, sep='\t', index_col=0, on_bad_lines='skip').T 
             counts = counts.merge(counts_to_merge, left_index=True, right_index=True)        
 
@@ -789,18 +792,25 @@ def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFram
     mir_activity_list = mir_activity_list.reset_index()
     mir_activity_list.to_html(path_to_list, escape=False, index=False, justify='left')
 
-def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame) -> sc.AnnData:
+def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame, 
+    populations: Optional[list]=None) -> sc.AnnData:
     '''Computing UMAP based on gene counts, and enriching it with miR activity scores.
 
     Args:
         counts: reads table.
         miR_activity_pvals: activity per spot per microRNA.
+        populations: (optional) list of two population string identifiers embedded in cell id.
 
     Returns:
         Enriched counts table with umap and miR activity scores.
     '''
     logging.info('Normalizing gene expression.')
     enriched_counts = sc.AnnData(counts.T)
+    if populations:
+        categories = pd.DataFrame(counts.columns,columns=['cell_id'])
+        enriched_counts.obs['populations'] = pd.Categorical(
+            np.where(categories['cell_id'].str.contains(
+                populations[0]), populations[0], populations[1]))
     sc.pp.filter_cells(enriched_counts, min_genes=200)
     sc.pp.filter_genes(enriched_counts,min_cells=3)
     sc.pp.calculate_qc_metrics(enriched_counts, percent_top=None, log1p=False, inplace=True)
@@ -828,19 +838,33 @@ def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame) -> sc.
     adata_merge = ad.concat(adatas, axis=1, merge="unique")
     return adata_merge
 
-def sort_activity_sc(miR_activity_pvals: pd.DataFrame, results_path: str, 
-    dataset_name: str) -> pd.DataFrame:
-    '''Sorts microRNA's by their overall activity.
+def sort_activity_sc(miR_activity_pvals: pd.DataFrame, 
+    populations: Optional[list]=None) -> pd.DataFrame:
+    '''Calls a sorting method according to availability of populations.
 
     Args:
         miR_activity_pvals: activity table per spot per microRNA.
-        results_path: path to save figures.
-        dataset_name: for plot name.
+        populations: (optional) list of two population string identifiers embedded in cell id.
 
     Returns:
         Sorted list of microRNA, from the most overall active to the least, over all cells. 
     '''
-    logging.info('Sorting microRNAs by their overall activity levels.')
+    logging.info('Sorting microRNAs accoridng to their activity patterns.')
+    if populations:
+        mir_activity_list = sort_activity_sc_with_populations(miR_activity_pvals, populations)
+    else:
+        mir_activity_list = sort_activity_sc_no_populations(miR_activity_pvals)
+    return mir_activity_list
+
+def sort_activity_sc_no_populations(miR_activity_pvals: pd.DataFrame) -> pd.DataFrame:
+    '''Sorts microRNA's by their overall activity.
+
+    Args:
+        miR_activity_pvals: activity table per spot per microRNA.
+
+    Returns:
+        Sorted list of microRNA, from the most overall active to the least, over all cells. 
+    '''
     log10_pvals = -np.log10(miR_activity_pvals)
     mir_activity_list = log10_pvals[
         log10_pvals > _NON_ACTIVE_THRESH].mean(axis=1).sort_values(ascending=False)
@@ -849,7 +873,79 @@ def sort_activity_sc(miR_activity_pvals: pd.DataFrame, results_path: str,
     mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
     return mir_activity_list
 
-def produce_sc_umaps(miR_list_figures: list, enriched_counts: sc.AnnData, results_path: str, 
+def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame, 
+    populations: list) -> pd.DataFrame:
+    '''Sorts active microRNAs according to their differential expression between populations.
+
+    Args:
+        miR_activity_pvals: activity table per spot per microRNA.
+        populations: list of two population string identifiers embedded in cell id.
+
+    Returns:
+        Sorted list of active microRNA, according to their differential expression 
+        between populations. 
+    '''
+    log10_pvals = -np.log10(miR_activity_pvals)
+    pop_1_cols = [col for col in log10_pvals.columns if (populations[0] in col)]
+    pop_2_cols = [col for col in log10_pvals.columns if (populations[1] in col)]
+    col_name_pop_1 = 'mean_' + populations[0]
+    col_name_pop_2 = 'mean_' + populations[1]
+    miR_list = miR_activity_pvals.index.tolist()
+    mir_amount = len(miR_list)
+    mir_activity_list = pd.DataFrame(
+        columns=['ranksum_pval', col_name_pop_1, col_name_pop_2, 'fdr_corrected'], index=miR_list)
+    for miR in miR_list:
+        pvals_pop_1 =  log10_pvals.loc[miR, pop_1_cols]
+        pvals_pop_2 =  log10_pvals.loc[miR, pop_2_cols]
+        stat, pval = ranksums(
+            pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH], 
+            pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH])
+        mir_activity_list['ranksum_pval'][miR] = pval
+        mir_activity_list[col_name_pop_1][miR] = pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH].mean()
+        mir_activity_list[col_name_pop_2][miR] = pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH].mean()
+
+    mir_activity_list = mir_activity_list.sort_values(by=['ranksum_pval'])
+    for i in range(len(mir_activity_list)):
+        mir_activity_list.iloc[i]['fdr_corrected'] = \
+            mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1)
+    mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
+    return mir_activity_list
+
+def plot_sc(miR_list_figures: list, enriched_counts: sc.AnnData, results_path: str, 
+    dataset_name: str, mir_activity_list: pd.DataFrame, miR_activity_pvals: pd.DataFrame, 
+    populations: Optional[list]=None):
+    '''Calls plotting functions according to availability of populations data.
+
+    Args:
+        miR_list_figures: list of microRNAs to produce figures for.
+        enriched_counts: enriched counts table with umap and miR activity scores.
+        results_path: path to save figures.
+        dataset_name: for plot name.
+        mir_activity_list: sorted list of most active microRNAs.
+        miR_activity_pvals: activity table per cell per microRNA.
+        populations: (optional) list of two population string identifiers embedded in cell id.
+
+    Returns:
+        None
+    '''
+    if populations:
+        plot_sc_with_populations(        
+            miR_list_figures, 
+            enriched_counts,
+            results_path, 
+            dataset_name, 
+            mir_activity_list,
+            miR_activity_pvals,
+            populations)
+    else:
+        plot_sc_no_populations(
+            miR_list_figures, 
+            enriched_counts,
+            results_path, 
+            dataset_name, 
+            mir_activity_list)
+
+def plot_sc_no_populations(miR_list_figures: list, enriched_counts: sc.AnnData, results_path: str, 
     dataset_name: str, mir_activity_list: pd.DataFrame):
     '''Produces UMAP figure with microRNA activity levels per microRNA in the list.
        Produces also a html file with list of microRNAs, sorted by their overall activity.
@@ -884,42 +980,89 @@ def produce_sc_umaps(miR_list_figures: list, enriched_counts: sc.AnnData, result
     mir_activity_list = mir_activity_list.reset_index()
     mir_activity_list.to_html(path_to_list, escape=False, index=False, justify='left')
 
+def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData, results_path: str, 
+    dataset_name: str, mir_activity_list: pd.DataFrame, miR_activity_pvals: pd.DataFrame, 
+    populations: list):
+    '''Produces UMAP figure and histogram with microRNA activity levels per microRNA in the list.
+       Produces also a html file with list of active microRNAs, sorted by their 
+       differential expression between the populations.
 
+    Args:
+        miR_list_figures: list of microRNAs to produce figures for.
+        enriched_counts: enriched counts table with umap and miR activity scores.
+        results_path: path to save figures.
+        dataset_name: for plot name.
+        mir_activity_list: sorted list of most active microRNAs.
+        miR_activity_pvals: activity table per cell per microRNA.
+        populations: list of two population string identifiers embedded in cell id.
 
+    Returns:
+        None
+    '''
+    logging.debug('Generating figures')
+    results_path_figures = os.path.join(results_path, 'activity maps')
+    path_to_list = '%s/sorted_mir_by_activity.html' %results_path
 
+    if not os.path.exists(results_path_figures):
+        os.makedirs(results_path_figures)
 
+    for miR in miR_list_figures:
+        umap_plot_file_name = '%s_%s.jpg' %(dataset_name, miR)
+        path_to_umap_plot = '%s/%s' %(results_path_figures, umap_plot_file_name)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+        sc.pl.umap(enriched_counts, size=10, show=False, ax=ax1)
+        sc.pl.umap(
+            enriched_counts[enriched_counts.obs['populations']==populations[0]], 
+            size=100,
+            color=miR, 
+            title='%s %s activity (-log10)' %(populations[0], miR), 
+            show=False, 
+            ax=ax1)
+        sc.pl.umap(enriched_counts, size=10, show=False, ax=ax2)
+        sc.pl.umap(
+            enriched_counts[enriched_counts.obs['populations']==populations[1]], 
+            size=100,
+            color=miR, 
+            title='%s %s activity (-log10)' %(populations[1], miR), 
+            show=False, 
+            ax=ax2)
+        fig.savefig(path_to_umap_plot)
+        logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_umap_plot))
+        ref_umap_path = '"./activity maps/%s"' %umap_plot_file_name 
+        index_rename = '<a href=%s target="_blank">%s</a>' %(ref_umap_path, miR)
+        
+        kwargs = dict(alpha=0.5, bins=100, density=True, stacked=False, histtype="bar")
+        legend_loc = 'upper right'
+        hist_plot_file_name = '%s_%s_%s_%s.jpg' %(dataset_name, miR, populations[0], populations[1])
+        path_to_hist_plot = '%s/%s' %(results_path_figures, hist_plot_file_name )
+        log10_pvals = -np.log10(miR_activity_pvals)
+        pop_1_cols = [col for col in log10_pvals.columns if (populations[0] in col)]
+        pop_2_cols = [col for col in log10_pvals.columns if (populations[1] in col)]
+        pvals_pop_1 =  log10_pvals.loc[miR, pop_1_cols]
+        pvals_pop_2 =  log10_pvals.loc[miR, pop_2_cols]
+        wrk_fdr_result = mir_activity_list.loc[miR]['fdr_corrected']
+        f, ax = plt.subplots()
+        plt.figure(figsize = (20, 10))
+        f.subplots_adjust(top=0.7)
+        plt.hist((pvals_pop_1, pvals_pop_2), **kwargs, label = (populations[0], populations[1]))
+        plt.xlabel('p-value (-log10)', fontsize = 26)
+        plt.ylabel('Probability', fontsize = 26)
+        plt.legend(loc=legend_loc, prop={'size': 28})
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+        plt.title('%s Activity Histogram \n%s Vs. %s' %(miR, populations[0], populations[1]), 
+                fontsize=34, pad=40, y=0.95)
+        f.tight_layout(pad = 0.5)     
+        plt.savefig(path_to_hist_plot)
+        plt.close()
+        logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_hist_plot))
+        ref_hist_path = '"./activity maps/%s"' %hist_plot_file_name 
+        score_col_rename = '<a href=%s target="_blank">%s</a>' %(ref_hist_path, wrk_fdr_result)
+        mir_activity_list.loc[miR]['fdr_corrected'] = score_col_rename
+        mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    mir_activity_list = mir_activity_list.reset_index()
+    mir_activity_list_to_user = mir_activity_list[['MicroRNA', 'fdr_corrected']].copy()
+    col_rename = '%s Vs. %s FDR Corrected ' %(populations[0],populations[1])
+    mir_activity_list_to_user = mir_activity_list_to_user.rename(columns={'fdr_corrected': col_rename})
+    mir_activity_list_to_user.to_html(path_to_list, escape=False, index=False, justify='left')
