@@ -808,9 +808,7 @@ def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame,
     enriched_counts = sc.AnnData(counts.T)
     if populations:
         categories = pd.DataFrame(counts.columns,columns=['cell_id'])
-        enriched_counts.obs['populations'] = pd.Categorical(
-            np.where(categories['cell_id'].str.contains(
-                populations[0]), populations[0], populations[1]))
+        enriched_counts.obs['populations'] = pd.Categorical(np.where(categories['cell_id'].str.contains(populations[0]), populations[0], populations[1]))
     sc.pp.filter_cells(enriched_counts, min_genes=200)
     sc.pp.filter_genes(enriched_counts,min_cells=3)
     sc.pp.calculate_qc_metrics(enriched_counts, percent_top=None, log1p=False, inplace=True)

@@ -15,6 +15,7 @@ import utils
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
 FLAGS = flags.FLAGS
@@ -42,7 +43,7 @@ flags.DEFINE_list(
 flags.DEFINE_list(
     'populations', None,
     ('Comma-separated list of two population string identifiers embedded in cell id.' 
-    'default: None. Example use: -populations=[\'DESEASE_\',\'CONTROL_\']'))
+    'default: None. Example use: -populations=\'DESEASE_\',\'CONTROL_\''))
 flags.DEFINE_boolean(
     'preprocess', False, 
     ('Performs additional preprocessing on %s data before computations, merges all '
