@@ -183,7 +183,8 @@ def mir_post_processing_spatial(data_path: str, counts_norm: pd.DataFrame, miR_a
 
     miR_list_figures = utils.get_figure_list(
         miR_list,
-        miR_figures)
+        miR_figures,
+        mir_activity_list)
 
     utils.produce_spatial_maps(
         miR_list_figures, 

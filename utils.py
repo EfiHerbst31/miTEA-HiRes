@@ -24,6 +24,7 @@ _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MAX_COLS = 10000
 _MHG_X_PARAM = 1
 _NON_ACTIVE_THRESH = 1.5
+_VERY_ACTIVE_THRESH = 7
 _10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
 _10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
 
@@ -746,7 +747,6 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
 
     return mir_activity_list
 
-
 def produce_spatial_maps(miR_list_figures: list, miR_activity_pvals: pd.DataFrame, 
     spatial_coors: pd.DataFrame, results_path: str, dataset_name: str, 
     mir_activity_list: pd.DataFrame):
@@ -906,6 +906,11 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
     for i in range(len(mir_activity_list)):
         mir_activity_list.iloc[i]['fdr_corrected'] = \
             mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1)
+
+    pval_mask = (mir_activity_list[col_name_pop_1] >= _VERY_ACTIVE_THRESH) | (mir_activity_list[col_name_pop_2] >= _VERY_ACTIVE_THRESH)
+    mir_activity_list_high_pval = mir_activity_list[pval_mask]
+    mir_activity_list_low_pval = mir_activity_list[~pval_mask]
+    mir_activity_list = pd.concat([mir_activity_list_high_pval, mir_activity_list_low_pval])
     mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
     return mir_activity_list
 
