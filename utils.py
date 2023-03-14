@@ -155,7 +155,7 @@ def mti_loader(species: str=constants._SPECIES_HOMO_SAPIENS) -> pd.DataFrame:
                          'update mti_loader function' % ' or '.join(constants._SUPPORTED_SPECIES))
     return mti_data 
 
-def mir_data_loading(miR_list: Optional[list], 
+def mir_data_loading(miR_list: Optional[list]=None, 
     species: Optional[str]=constants._SPECIES_HOMO_SAPIENS, 
     debug: Optional[bool]=False) -> Tuple[pd.DataFrame, list]:
     '''Loading microRNA target data.
@@ -808,7 +808,9 @@ def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame,
     enriched_counts = sc.AnnData(counts.T)
     if populations:
         categories = pd.DataFrame(counts.columns,columns=['cell_id'])
-        enriched_counts.obs['populations'] = pd.Categorical(np.where(categories['cell_id'].str.contains(populations[0]), populations[0], populations[1]))
+        enriched_counts.obs['populations'] = pd.Categorical(
+            np.where(categories['cell_id'].str.contains(
+                populations[0]), populations[0], populations[1]))
     sc.pp.filter_cells(enriched_counts, min_genes=200)
     sc.pp.filter_genes(enriched_counts,min_cells=3)
     sc.pp.calculate_qc_metrics(enriched_counts, percent_top=None, log1p=False, inplace=True)
@@ -891,23 +893,35 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
     miR_list = miR_activity_pvals.index.tolist()
     mir_amount = len(miR_list)
     mir_activity_list = pd.DataFrame(
-        columns=['ranksum_pval', col_name_pop_1, col_name_pop_2, 'fdr_corrected'], index=miR_list)
+        columns=['ranksum_pval', col_name_pop_1, col_name_pop_2, 'fdr_corrected'], 
+        index=miR_list).astype('float64')
     for miR in miR_list:
         pvals_pop_1 =  log10_pvals.loc[miR, pop_1_cols]
         pvals_pop_2 =  log10_pvals.loc[miR, pop_2_cols]
         stat, pval = ranksums(
             pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH], 
             pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH])
-        mir_activity_list['ranksum_pval'][miR] = pval
-        mir_activity_list[col_name_pop_1][miR] = pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH].mean()
-        mir_activity_list[col_name_pop_2][miR] = pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH].mean()
+        if np.isnan(pval):
+            mir_activity_list['ranksum_pval'][miR] = 1
+            mir_activity_list[col_name_pop_1][miR] = pvals_pop_1.mean()
+            mir_activity_list[col_name_pop_2][miR] = pvals_pop_2.mean()
+        else:
+            mir_activity_list['ranksum_pval'][miR] = pval
+            mir_activity_list[col_name_pop_1][miR] = \
+                pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH].mean()
+            mir_activity_list[col_name_pop_2][miR] = \
+                pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH].mean()
 
     mir_activity_list = mir_activity_list.sort_values(by=['ranksum_pval'])
     for i in range(len(mir_activity_list)):
-        mir_activity_list.iloc[i]['fdr_corrected'] = \
-            mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1)
+        if mir_activity_list.iloc[i]['ranksum_pval'] < 1:
+            mir_activity_list.iloc[i]['fdr_corrected'] = \
+                mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1)
 
-    pval_mask = (mir_activity_list[col_name_pop_1] >= _VERY_ACTIVE_THRESH) | (mir_activity_list[col_name_pop_2] >= _VERY_ACTIVE_THRESH)
+    pval_mask = (
+        (mir_activity_list['ranksum_pval'] < 1) & 
+        ((mir_activity_list[col_name_pop_1] >= _VERY_ACTIVE_THRESH) | 
+        (mir_activity_list[col_name_pop_2] >= _VERY_ACTIVE_THRESH)))
     mir_activity_list_high_pval = mir_activity_list[pval_mask]
     mir_activity_list_low_pval = mir_activity_list[~pval_mask]
     mir_activity_list = pd.concat([mir_activity_list_high_pval, mir_activity_list_low_pval])
@@ -971,7 +985,7 @@ def plot_sc_no_populations(miR_list_figures: list, enriched_counts: sc.AnnData, 
         os.makedirs(results_path_figures)
 
     for miR in miR_list_figures:
-        plot_file_name = '%s_%s.jpg' %(dataset_name, miR)
+        plot_file_name = '%s_%s_%s.jpg' %(dataset_name, miR, 'umap')
         path_to_plot = '%s/%s' %(results_path_figures, plot_file_name)
         fig, ax = plt.subplots(figsize=(10, 10))
         sc.pl.umap(enriched_counts, color=miR, title='%s activity (-log10)' %miR, show=False, ax=ax)
@@ -1010,7 +1024,8 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
         os.makedirs(results_path_figures)
 
     for miR in miR_list_figures:
-        umap_plot_file_name = '%s_%s.jpg' %(dataset_name, miR)
+        umap_plot_file_name = '%s_%s_%s_%s_%s.jpg' %(
+            dataset_name, miR, populations[0], populations[1], 'umap')
         path_to_umap_plot = '%s/%s' %(results_path_figures, umap_plot_file_name)
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
         sc.pl.umap(enriched_counts, size=10, show=False, ax=ax1)
@@ -1036,7 +1051,8 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
         
         kwargs = dict(alpha=0.5, bins=100, density=True, stacked=False, histtype="bar")
         legend_loc = 'upper right'
-        hist_plot_file_name = '%s_%s_%s_%s.jpg' %(dataset_name, miR, populations[0], populations[1])
+        hist_plot_file_name = '%s_%s_%s_%s_%s.jpg' %(
+            dataset_name, miR, populations[0], populations[1], 'histogram')
         path_to_hist_plot = '%s/%s' %(results_path_figures, hist_plot_file_name )
         log10_pvals = -np.log10(miR_activity_pvals)
         pop_1_cols = [col for col in log10_pvals.columns if (populations[0] in col)]
@@ -1061,9 +1077,11 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
         logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_hist_plot))
         ref_hist_path = '"./activity maps/%s"' %hist_plot_file_name 
         score_col_rename = '<a href=%s target="_blank">%s</a>' %(ref_hist_path, wrk_fdr_result)
-        mir_activity_list.loc[miR]['fdr_corrected'] = score_col_rename
+        mir_activity_list['fdr_corrected'][miR] = score_col_rename
         mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
 
+    for miR in mir_activity_list.iloc[10:].index.to_list():
+        mir_activity_list['fdr_corrected'][miR] = str(mir_activity_list['fdr_corrected'][miR])
     mir_activity_list = mir_activity_list.reset_index()
     mir_activity_list_to_user = mir_activity_list[['MicroRNA', 'fdr_corrected']].copy()
     col_rename = '%s Vs. %s FDR Corrected ' %(populations[0],populations[1])
