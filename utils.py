@@ -919,13 +919,24 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
             mir_activity_list.iloc[i]['fdr_corrected'] = \
                 mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1)
 
-    pval_mask = (
-        (mir_activity_list['ranksum_pval'] < 1) & 
-        ((mir_activity_list[col_name_pop_1] >= _VERY_ACTIVE_THRESH) | 
-        (mir_activity_list[col_name_pop_2] >= _VERY_ACTIVE_THRESH)))
-    mir_activity_list_high_pval = mir_activity_list[pval_mask]
-    mir_activity_list_low_pval = mir_activity_list[~pval_mask]
-    mir_activity_list = pd.concat([mir_activity_list_high_pval, mir_activity_list_low_pval])
+    mean_all = mir_activity_list[col_name_pop_1].append(mir_activity_list[col_name_pop_2])
+    very_active = mean_all.quantile(0.97)
+    active = mean_all.quantile(0.9)
+
+    pval_mask_active = (
+        (mir_activity_list['fdr_corrected'] < 1e-8) & 
+        ((mir_activity_list[col_name_pop_1] >= active) | 
+        (mir_activity_list[col_name_pop_2] >= active)))
+
+    pval_mask_very_active = (
+        (mir_activity_list['fdr_corrected'] < 1e-8) & 
+        ((mir_activity_list[col_name_pop_1] >= very_active) | 
+        (mir_activity_list[col_name_pop_2] >= very_active)))
+    
+    mir_activity_list_high_pval = mir_activity_list[pval_mask_very_active]
+    mir_activity_list_mid_pval = mir_activity_list[pval_mask_active & ~pval_mask_very_active]
+    mir_activity_list_low_pval = mir_activity_list[~pval_mask_active]
+    mir_activity_list = pd.concat([mir_activity_list_high_pval, mir_activity_list_mid_pval, mir_activity_list_low_pval])
     mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
     return mir_activity_list
 
