@@ -888,7 +888,7 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
     '''
     log10_pvals = -np.log10(miR_activity_pvals)
     pop_1_cols = [col for col in log10_pvals.columns if (populations[0] in col)]
-    pop_2_cols = [col for col in log10_pvals.columns if col not in pop_1_cols)]
+    pop_2_cols = [col for col in log10_pvals.columns if (col not in pop_1_cols)]
 
     # pop_2_cols = [col for col in log10_pvals.columns if (populations[1] in col)]
     col_name_pop_1 = 'mean_' + populations[0]
