@@ -21,7 +21,6 @@ import constants
 
 _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
-_MAX_COLS = 10000
 _MHG_X_PARAM = 1
 _NON_ACTIVE_THRESH = 1.5
 _VERY_ACTIVE_THRESH = 7
@@ -440,7 +439,7 @@ def load_merge_tsv_files(tsv_files: list) -> pd.DataFrame:
 
     return counts     
 
-def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
+def load_merge_10x_files(mtx_files: list, sample_size: Optional[int]=constants._MAX_COLS) -> pd.DataFrame:
     '''
     Loads and merges 10x files.
 
@@ -452,6 +451,7 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
 
     Args:
         mtx_files: list of detected mtx files.
+        sample_size: (optional) amount of cells to sample
 
     Returns:
         counts: merged data.
@@ -460,7 +460,7 @@ def load_merge_10x_files(mtx_files: list) -> pd.DataFrame:
     file_path = '/'.join(mtx_files[0].split('/')[:-1])
     len_files = len(mtx_files)
     matrix_mtx_file = mtx_files[0]
-    relative_sampling = int(_MAX_COLS/len_files)
+    relative_sampling = int(sample_size/len_files)
     features_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_FEATURES_SUFFIX)
     barcodes_tsv_file = os.path.join(file_path, files_prefix + _10X_SCRNASEQ_BARCODES_SUFFIX)
     counts = switch_10x_to_txt_sc(
@@ -503,7 +503,8 @@ def uzip_files(gz_files: list) -> None:
             shutil.copyfileobj(f_in, f_out)
 
 
-def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFrame:
+def scRNAseq_preprocess_loader(dataset_name: str, data_path: str, 
+    sample_size: Optional[int]=constants._MAX_COLS) -> pd.DataFrame:
     '''Preprocesses and loads scRNAseq data.
 
     Merges all txt or tsv tables found in data_path and then samples 10K columns.
@@ -512,6 +513,7 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
     Args:
         dataset_name: dataset name.
         data_path: path to dataset folder.
+        sample_size: (optional) amount of cells to sample
 
     Returns:
         Reads table with cells (columns) and genes (rows).
@@ -538,17 +540,17 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
     elif txt_files:
         counts = load_merge_txt_files(txt_files)
     elif mtx_files:
-        counts = load_merge_10x_files(mtx_files)
+        counts = load_merge_10x_files(mtx_files, sample_size)
     elif tsv_files:
         counts = load_merge_tsv_files(tsv_files)
     else:
         raise UsageError('No \'txt\', \'tsv\' or \'mtx\' files were found in %s. ' %data_path)
     
     len_cols = len(counts.columns)
-    if len_cols > _MAX_COLS:
+    if len_cols > sample_size:
         logging.info('%s columns were detected' %len_cols)
-        logging.info('Sampling %i columns' %_MAX_COLS)
-        counts = counts.sample(n=_MAX_COLS, axis='columns')
+        logging.info('Sampling %i columns' %sample_size)
+        counts = counts.sample(n=sample_size, axis='columns')
     
     path_to_pkl = os.path.join(data_path, dataset_name + '.pkl')
     counts.to_pickle(path_to_pkl)
@@ -575,10 +577,10 @@ def scRNAseq_loader(data_path: str) -> pd.DataFrame:
     else: #pkl file
         counts = pd.read_pickle(file_name)
     col_len = len(counts.columns)
-    if col_len > _MAX_COLS:
+    if col_len > constants._MAX_COLS:
         logging.info('Reads table is too big, having: %i columns, this might take too long '
                      'compute microRNA activity. Please consider sampling data up to %i columns, '
-                     'by passing \'process\'=True' %(col_len, _MAX_COLS))
+                     'by passing \'process\'=True' %(col_len, constants._MAX_COLS))
     return counts
 
 

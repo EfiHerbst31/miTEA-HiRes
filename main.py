@@ -50,6 +50,9 @@ flags.DEFINE_boolean(
 flags.DEFINE_string(
     'results_path', None, 
     'Path to save results.')
+flags.DEFINE_integer(
+    'sample_size', constants._MAX_COLS, 
+    'Amount of cells to sample in total. default: %s.' %constants._MAX_COLS)
 flags.DEFINE_string(
     'species', constants._SPECIES_HOMO_SAPIENS, 
     'Options: %s .' % ' or '.join(constants._SUPPORTED_SPECIES))
@@ -72,7 +75,7 @@ flags.mark_flag_as_required('dataset_name')
 flags.mark_flag_as_required('data_path')
 
 def data_handling(data_path: str, dataset_name: str, data_type: Optional[str], 
-    preprocess: Optional[bool]=True) -> pd.DataFrame:
+    preprocess: Optional[bool]=True, sample_size: Optional[int]=constants._MAX_COLS) -> pd.DataFrame:
     '''Loading, preprocessing (if needed) and normalizing data.
 
     Args:
@@ -81,6 +84,7 @@ def data_handling(data_path: str, dataset_name: str, data_type: Optional[str],
         data_type: (optional) data type 'spatial' or 'scRNAseq'.
         preprocess: (optional) if True, performing data preprocessing if data is too big or is
             composed of multiple files. If False, will not perform data preprocessing. 
+        sample_size: (optional) amount of cells to sample.
 
     Returns:
         counts_norm: normalized reads table
@@ -93,7 +97,7 @@ def data_handling(data_path: str, dataset_name: str, data_type: Optional[str],
         counts = utils.visium_loader(data_path)
     else:
         if preprocess:
-            counts = utils.scRNAseq_preprocess_loader(dataset_name, data_path)
+            counts = utils.scRNAseq_preprocess_loader(dataset_name, data_path, sample_size)
         else:
             counts = utils.scRNAseq_loader(data_path)
     
@@ -250,7 +254,8 @@ def mir_post_processing_sc(data_path: str, counts: pd.DataFrame, miR_activity_pv
 
 
 def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: Optional[int],
-    results_path: Optional[str], species: Optional[str]=constants._SPECIES_HOMO_SAPIENS,  
+    results_path: Optional[str], sample_size: Optional[int]=constants._MAX_COLS, 
+    species: Optional[str]=constants._SPECIES_HOMO_SAPIENS,  
     miR_figures: Optional[str]=constants._DRAW_TOP_10, 
     preprocess: Optional[bool]=True, thresh: Optional[float]=constants._ACTIVITY_THRESH,
     populations: Optional[list]=None, debug: Optional[bool]=False):
@@ -266,6 +271,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
         miR_list: (optional) list of microRNAs to compute.
         cpus: (optional) amount of cpus to use in parallel.
         results_path: (optional) path to save results.
+        sample_size: (optional) desired sample size for amount of cells.
         species: (optional) either 'homo_sapiens' (default) or 'mus_musculus' are supported. 
         miR_figures: (optional) which microRNAs to plot. 
         preprocess: (optional) if True, performing data preprocessing if data is too big or is
@@ -298,7 +304,8 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
         data_path, 
         dataset_name, 
         data_type=data_type, 
-        preprocess=preprocess)
+        preprocess=preprocess,
+        sample_size=sample_size)
 
     miR_list, miR_activity_pvals = computing_mir_activity(
         counts_norm, 
@@ -339,6 +346,7 @@ def main(argv):
         miR_list=FLAGS.miR_list, 
         cpus=FLAGS.cpus, 
         results_path=FLAGS.results_path, 
+        sample_size=FLAGS.sample_size,
         species=FLAGS.species, 
         miR_figures=FLAGS.miR_figures,
         preprocess=FLAGS.preprocess, 

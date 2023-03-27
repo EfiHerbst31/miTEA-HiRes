@@ -35,3 +35,6 @@ _SPATIAL_FOLDERS = frozenset({
 
 # Default threshold used to determine if a microRNA is active or not.
 _ACTIVITY_THRESH = 0.00001
+
+# Default sample size used to sample total ampunt of celss.
+_MAX_COLS = 10000
