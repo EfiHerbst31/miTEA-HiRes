@@ -536,7 +536,7 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str,
     mtx_files = glob.glob(path_to_mtx)
     pkl_files = glob.glob(path_to_pkl)
     if pkl_files:
-        counts = pd.read_pickle(file_name)
+        counts = pd.read_pickle(pkl_files)
     elif txt_files:
         counts = load_merge_txt_files(txt_files)
     elif mtx_files:
