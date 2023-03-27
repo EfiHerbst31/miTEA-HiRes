@@ -531,10 +531,12 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str,
     path_to_tsv = '%s/*.tsv' %data_path
     path_to_mtx = '%s/*.mtx' %data_path
     path_to_pkl = '%s/*.pkl' %data_path
+    print(data_path)
     txt_files = glob.glob(path_to_txt)
     tsv_files = glob.glob(path_to_tsv)
     mtx_files = glob.glob(path_to_mtx)
     pkl_files = glob.glob(path_to_pkl)
+    print(pkl_files)
     if pkl_files:
         counts = pd.read_pickle(pkl_files)
     elif txt_files:
