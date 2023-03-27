@@ -530,7 +530,7 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str,
     path_to_txt = '%s/*.txt' %data_path
     path_to_tsv = '%s/*.tsv' %data_path
     path_to_mtx = '%s/*.mtx' %data_path
-    pkl_files = '%s/*.pkl' %data_path
+    path_to_pkl = '%s/*.pkl' %data_path
     txt_files = glob.glob(path_to_txt)
     tsv_files = glob.glob(path_to_tsv)
     mtx_files = glob.glob(path_to_mtx)
