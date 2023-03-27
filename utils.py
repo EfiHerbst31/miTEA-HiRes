@@ -528,18 +528,21 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str) -> pd.DataFram
     path_to_txt = '%s/*.txt' %data_path
     path_to_tsv = '%s/*.tsv' %data_path
     path_to_mtx = '%s/*.mtx' %data_path
+    pkl_files = '%s/*.pkl' %data_path
     txt_files = glob.glob(path_to_txt)
     tsv_files = glob.glob(path_to_tsv)
     mtx_files = glob.glob(path_to_mtx)
-    if txt_files:
+    pkl_files = glob.glob(path_to_pkl)
+    if pkl_files:
+        counts = pd.read_pickle(file_name)
+    elif txt_files:
         counts = load_merge_txt_files(txt_files)
     elif mtx_files:
         counts = load_merge_10x_files(mtx_files)
     elif tsv_files:
         counts = load_merge_tsv_files(tsv_files)
     else:
-        raise UsageError('No \'txt\', \'tsv\' or \'mtx\' files were found in %s. '
-                         'Please try passing -preprocess=True' %data_path)
+        raise UsageError('No \'txt\', \'tsv\' or \'mtx\' files were found in %s. ' %data_path)
     
     len_cols = len(counts.columns)
     if len_cols > _MAX_COLS:
