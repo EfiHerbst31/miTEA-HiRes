@@ -836,7 +836,7 @@ def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame,
     sc.pp.neighbors(enriched_counts, n_neighbors=10, n_pcs=30)
     sc.tl.umap(enriched_counts)
     logging.info('Enriching with microRNA activity results.')
-    log10_pvals = -np.log10(miR_activity_pvals)
+    log10_pvals = -np.log10(miR_activity_pvals.astype(np.float64))
     mir_for_merge = sc.AnnData(log10_pvals.T)
     adatas = []
     adatas.append(enriched_counts)
@@ -871,7 +871,7 @@ def sort_activity_sc_no_populations(miR_activity_pvals: pd.DataFrame) -> pd.Data
     Returns:
         Sorted list of microRNA, from the most overall active to the least, over all cells. 
     '''
-    log10_pvals = -np.log10(miR_activity_pvals)
+    log10_pvals = -np.log10(miR_activity_pvals.astype(np.float64))
     mir_activity_list = log10_pvals[
         log10_pvals > _NON_ACTIVE_THRESH].mean(axis=1).sort_values(ascending=False)
     mir_activity_list = pd.DataFrame(mir_activity_list)
