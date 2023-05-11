@@ -361,6 +361,28 @@ def load_coors_configuration_3(spatial_path: str, counts: pd.DataFrame) -> Optio
     except:
         logging.debug('Failed loading spatial coordinates with configuration #3')
 
+def load_coors_configuration_4(spatial_path: str, counts: pd.DataFrame) -> Optional[pd.DataFrame]:
+    '''Loads spatial coordinates with configuration #4.
+
+    Args:
+        spatial_path: path to 'spatial' folder.
+        counts: reads table.
+
+    Returns: 
+        Spatial coordinates or None.
+    '''
+    try:  
+        path_to_json = '%s/*.json' %spatial_path
+        json_files = glob.glob(path_to_json)
+        with open(json_files[0]) as json_data:
+            data = json.load(json_data)
+            spatial_coors = pd.DataFrame(data['oligo'])
+
+        spatial_coors = np.array(spatial_coors[['col','row']])
+        return spatial_coors
+    except:
+        logging.debug('Failed loading spatial coordinates with configuration #4')
+
 def get_spatial_coors(data_path: str, counts: pd.DataFrame) -> pd.DataFrame:
     '''Loads spatial coordinates.
 
@@ -394,8 +416,13 @@ def get_spatial_coors(data_path: str, counts: pd.DataFrame) -> pd.DataFrame:
     if spatial_coors is not None:
         return spatial_coors
     else:
-        raise TypeError('Problem loading %s coordinates' %constants._DATA_TYPE_SPATIAL)    
+        logging.debug('Retrying with configuration #4')
 
+    spatial_coors = load_coors_configuration_4(spatial_path, counts)
+    if spatial_coors is not None:
+        return spatial_coors
+    else:
+        raise TypeError('Problem loading %s coordinates' %constants._DATA_TYPE_SPATIAL)    
 def load_merge_txt_files(txt_files: list) -> pd.DataFrame:
     '''
     Loads and merges txt files.
@@ -815,7 +842,8 @@ def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame,
         categories = pd.DataFrame(counts.columns,columns=['cell_id'])
         enriched_counts.obs['populations'] = pd.Categorical(
             np.where(categories['cell_id'].str.contains(
-                populations[0]), populations[0], populations[1]))
+                populations[0]), populations[0], (np.where(categories['cell_id'].str.contains(
+                populations[1]), populations[1], 'Other'))))
     sc.pp.filter_cells(enriched_counts, min_genes=200)
     sc.pp.filter_genes(enriched_counts,min_cells=3)
     sc.pp.calculate_qc_metrics(enriched_counts, percent_top=None, log1p=False, inplace=True)
@@ -893,8 +921,9 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
     '''
     log10_pvals = -np.log10(miR_activity_pvals)
     pop_1_cols = [col for col in log10_pvals.columns if (populations[0] in col)]
-    pop_2_cols = [col for col in log10_pvals.columns if (col not in pop_1_cols)]
-
+    pop_2_cols = [col for col in log10_pvals.columns if (populations[1] in col)]
+    # populations should be unique
+        # pop_2_cols = [col for col in log10_pvals.columns if (col not in pop_1_cols)]
     # pop_2_cols = [col for col in log10_pvals.columns if (populations[1] in col)]
     col_name_pop_1 = 'mean_' + populations[0]
     col_name_pop_2 = 'mean_' + populations[1]
@@ -928,6 +957,7 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
 
     mean_all = mir_activity_list[col_name_pop_1].append(mir_activity_list[col_name_pop_2])
     very_active = mean_all.quantile(0.97)
+    # very_active = mean_all.quantile(0.99)
     active = mean_all.quantile(0.9)
 
     pval_mask_active = (
@@ -940,8 +970,9 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
         ((mir_activity_list[col_name_pop_1] >= very_active) | 
         (mir_activity_list[col_name_pop_2] >= very_active)))
     
-    mir_activity_list_high_pval = mir_activity_list[pval_mask_very_active]
-    mir_activity_list_mid_pval = mir_activity_list[pval_mask_active & ~pval_mask_very_active]
+    # mir_activity_list_high_pval = mir_activity_list[pval_mask_very_active]
+    mir_activity_list_high_pval = mir_activity_list[pval_mask_very_active].sort_values(by=[col_name_pop_2], ascending=False)
+    mir_activity_list_mid_pval = mir_activity_list[pval_mask_active & ~pval_mask_very_active].sort_values(by=[col_name_pop_2], ascending=False)
     mir_activity_list_low_pval = mir_activity_list[~pval_mask_active]
     mir_activity_list = pd.concat([mir_activity_list_high_pval, mir_activity_list_mid_pval, mir_activity_list_low_pval])
     mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
@@ -1068,7 +1099,6 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
         ref_umap_path = '"./activity maps/%s"' %umap_plot_file_name 
         index_rename = '<a href=%s target="_blank">%s</a>' %(ref_umap_path, miR)
         
-        kwargs = dict(alpha=0.5, bins=100, density=True, stacked=False, histtype="bar")
         legend_loc = 'upper right'
         hist_plot_file_name = '%s_%s_%s_%s_%s.jpg' %(
             dataset_name, miR, populations[0], populations[1], 'histogram')
@@ -1079,6 +1109,8 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
         pvals_pop_1 =  log10_pvals.loc[miR, pop_1_cols]
         pvals_pop_2 =  log10_pvals.loc[miR, pop_2_cols]
         wrk_fdr_result = mir_activity_list.loc[miR]['fdr_corrected']
+        bins = max(30, int(100 * (len(pvals_pop_1)+len(pvals_pop_2))/10000))
+        kwargs = dict(alpha=0.5, bins=bins, density=True, stacked=False, histtype="bar")
         f, ax = plt.subplots()
         plt.figure(figsize = (20, 10))
         f.subplots_adjust(top=0.7)
