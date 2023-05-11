@@ -41,7 +41,7 @@ flags.DEFINE_list(
      'Example use: -miR_list=hsa-miR-300,hsa-miR-6502-5p,hsa-miR-6727-3p'))
 flags.DEFINE_list(
     'populations', None,
-    ('Comma-separated list of two population string identifiers embedded in cell id.' 
+    ('Comma-separated list of two unique population string identifiers embedded in cell id.' 
     'default: None. Example use: -populations=\'DESEASE_\',\'CONTROL_\''))
 flags.DEFINE_boolean(
     'preprocess', False, 
