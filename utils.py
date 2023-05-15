@@ -373,13 +373,19 @@ def load_coors_configuration_4(spatial_path: str, counts: pd.DataFrame) -> Optio
         Spatial coordinates or None.
     '''
     try:  
-        path_to_json = '%s/*.json' %spatial_path
-        json_files = glob.glob(path_to_json)
-        with open(json_files[0]) as json_data:
-            data = json.load(json_data)
-            spatial_coors = pd.DataFrame(data['oligo'])
+        # path_to_json = '%s/*.json' %spatial_path
+        # json_files = glob.glob(path_to_json)
+        # with open(json_files[0]) as json_data:
+        #     data = json.load(json_data)
+        #     spatial_coors = pd.DataFrame(data['oligo'])
 
-        spatial_coors = np.array(spatial_coors[['col','row']])
+        # spatial_coors = np.array(spatial_coors[['col','row']])
+        # return spatial_coors
+        path_to_txt = '%s/*.txt' %spatial_path
+        txt_files = glob.glob(path_to_txt)
+        spatial_coors = pd.read_csv(txt_files[0], delimiter='\t', index_col=0, header=None)
+        spatial_coors = spatial_coors.loc[list(counts)]
+        spatial_coors = np.array(spatial_coors[[1,2]])
         return spatial_coors
     except:
         logging.debug('Failed loading spatial coordinates with configuration #4')
