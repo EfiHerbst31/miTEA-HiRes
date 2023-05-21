@@ -32,6 +32,10 @@ flags.DEFINE_string(
     'Name of your dataset. This is used to generate results path')
 flags.DEFINE_boolean(
     'debug', False, 'Produces debugging output.')
+flags.DEFINE_integer(
+    'filter_spots', None, 
+    'Filter spots containins total amount of reads below the specified number. '
+    'default: do not filter any spot.')
 flags.DEFINE_string(
     'miR_figures', constants._DRAW_TOP_10, 
     'Which microRNAs activity maps to draw. Options: %s .' % ' or '.join(constants._SUPPORTED_DRAW))
@@ -75,7 +79,8 @@ flags.mark_flag_as_required('dataset_name')
 flags.mark_flag_as_required('data_path')
 
 def data_handling(data_path: str, dataset_name: str, data_type: Optional[str], 
-    preprocess: Optional[bool]=True, sample_size: Optional[int]=constants._MAX_COLS) -> pd.DataFrame:
+    preprocess: Optional[bool]=True, filter_spots: Optional[int]=None, 
+    sample_size: Optional[int]=constants._MAX_COLS) -> pd.DataFrame:
     '''Loading, preprocessing (if needed) and normalizing data.
 
     Args:
@@ -84,6 +89,7 @@ def data_handling(data_path: str, dataset_name: str, data_type: Optional[str],
         data_type: (optional) data type 'spatial' or 'scRNAseq'.
         preprocess: (optional) if True, performing data preprocessing if data is too big or is
             composed of multiple files. If False, will not perform data preprocessing. 
+        filter_spots: (optional) filter spots containing total number of reads below this number.
         sample_size: (optional) amount of cells to sample.
 
     Returns:
@@ -94,7 +100,7 @@ def data_handling(data_path: str, dataset_name: str, data_type: Optional[str],
        data_type =  utils.check_data_type(data_path)
 
     if data_type == constants._DATA_TYPE_SPATIAL:
-        counts = utils.visium_loader(data_path)
+        counts = utils.visium_loader(data_path, filter_spots)
     else:
         if preprocess:
             counts = utils.scRNAseq_preprocess_loader(dataset_name, data_path, sample_size)
@@ -258,7 +264,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
     species: Optional[str]=constants._SPECIES_HOMO_SAPIENS,  
     miR_figures: Optional[str]=constants._DRAW_TOP_10, 
     preprocess: Optional[bool]=True, thresh: Optional[float]=constants._ACTIVITY_THRESH,
-    populations: Optional[list]=None, debug: Optional[bool]=False):
+    populations: Optional[list]=None, debug: Optional[bool]=False, filter_spots: Optional[int]=None):
     '''Performing end-to-end microRNA activity map computation.
 
     Loading spatial/scRNAseq data and preprocessing if needed.
@@ -279,6 +285,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
         thresh: (optional) thresold to define what is considered active.
         populations: (optional) list of two population string identifiers embedded in cell id.
         debug: (optional) if True, provides aditional information. Default=False.
+        filter_spots: (optional) filter spots containing total reads below this number.
 
     Returns:
         None
@@ -305,6 +312,7 @@ def compute(data_path: str, dataset_name: str, miR_list: Optional[list], cpus: O
         dataset_name, 
         data_type=data_type, 
         preprocess=preprocess,
+        filter_spots=filter_spots,
         sample_size=sample_size)
 
     miR_list, miR_activity_pvals = computing_mir_activity(
@@ -352,7 +360,8 @@ def main(argv):
         preprocess=FLAGS.preprocess, 
         thresh=FLAGS.thresh,
         populations=FLAGS.populations,
-        debug=FLAGS.debug)
+        debug=FLAGS.debug,
+        filter_spots=FLAGS.filter_spots)
 
 if __name__ == '__main__': 
     app.run(main)

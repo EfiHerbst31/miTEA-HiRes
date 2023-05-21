@@ -10,10 +10,12 @@ _SUPPORTED_SPECIES = frozenset({
 _DRAW_ALL = 'all'
 _DRAW_BOTTOM_10 = 'bottom_10'
 _DRAW_TOP_10 = 'top_10'
+_DRAW_TOP_100 = 'top_100'
 _SUPPORTED_DRAW = frozenset({
   _DRAW_ALL,
   _DRAW_BOTTOM_10,
-  _DRAW_TOP_10
+  _DRAW_TOP_10,
+  _DRAW_TOP_100
 })
 
 # MicroRNA prefixes for the supported species.

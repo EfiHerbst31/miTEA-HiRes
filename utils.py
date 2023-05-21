@@ -277,11 +277,12 @@ def switch_10x_to_txt(matrix_mtx_file: str, features_tsv_file: str,
     return data
 
 
-def visium_loader(data_path: str) -> pd.DataFrame:
+def visium_loader(data_path: str, filter_spots: Optional[int]=None) -> pd.DataFrame:
     '''Loads visium data.
 
     Args:
         data_path: path to dataset folder.
+        filter_spots: (optional) filter spots containing total amount of reads below this number.
     
     Returns:
         Reads table with spots (columns) and genes (rows).
@@ -292,6 +293,8 @@ def visium_loader(data_path: str) -> pd.DataFrame:
     features_tsv_file = os.path.join(counts_path, 'features.tsv')
     barcodes_tsv_file = os.path.join(counts_path, 'barcodes.tsv')
     counts = switch_10x_to_txt(matrix_mtx_file, features_tsv_file, barcodes_tsv_file)
+    if filter_spots is not None:
+        counts = counts.loc[:, (counts.sum(axis=0) >= filter_spots)]
 
     return counts
 
@@ -751,6 +754,8 @@ def get_figure_list(miR_list: list, miR_figures: str, mir_activity_list: pd.Data
         miR_list_figures = miR_list
     elif miR_figures == constants._DRAW_TOP_10:
         miR_list_figures = mir_activity_list.index[:10].tolist()
+    elif miR_figures == constants._DRAW_TOP_100:
+        miR_list_figures = mir_activity_list.index[:100].tolist()
     else: #'bottom_10'
         miR_list_figures = mir_activity_list.index[-10:].tolist()
     logging.debug('Figures are produced for the following microRNAs: %s', miR_list_figures)
