@@ -704,8 +704,6 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     Using mHG test.
     If no targets are found in the reads table for a particular microRNA, 
     the result will be p-value of 0 for all cells/spots.
-    If there are too many genes for the mHG test to handle, the list is cut to the maximum allowed, 
-    removing the highly expressed genes from the bottom of the list.
 
     Args:
         cell:  column id.
