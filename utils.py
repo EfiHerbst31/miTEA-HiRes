@@ -23,7 +23,7 @@ import constants
 _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MHG_X_PARAM = 1
-_NON_ACTIVE_THRESH = 1.5
+#_NON_ACTIVE_THRESH = 1.5
 _VERY_ACTIVE_THRESH = 7
 _10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
 _10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
@@ -544,7 +544,8 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str,
     sample_size: Optional[int]=constants._MAX_COLS) -> pd.DataFrame:
     '''Preprocesses and loads scRNAseq data.
 
-    Merges all txt or tsv tables found in data_path and then samples 10K columns.
+    Merges all txt or tsv tables found in data_path and then samples 10K columns, 
+    and drops duplicated cells in terms of gene expression profiles.
     Saves under the name given in dataset_name with .pkl extension
 
     Args:
@@ -589,13 +590,14 @@ def scRNAseq_preprocess_loader(dataset_name: str, data_path: str,
         logging.info('Sampling %i columns' %sample_size)
         counts = counts.sample(n=sample_size, axis='columns')
     
+    counts = counts.T.drop_duplicates().T
     path_to_pkl = os.path.join(data_path, dataset_name + '.pkl')
     counts.to_pickle(path_to_pkl)
     
     return counts
 
 def scRNAseq_loader(data_path: str) -> pd.DataFrame:
-    '''Loads scRNAseq data.
+    '''Loads scRNAseq data and drops duplicated cells in terms of gene expression profile.
 
     Args:
         data_path: path to dataset folder.
@@ -618,6 +620,7 @@ def scRNAseq_loader(data_path: str) -> pd.DataFrame:
         logging.info('Reads table is too big, having: %i columns, this might take too long '
                      'compute microRNA activity. Please consider sampling data up to %i columns, '
                      'by passing \'process\'=True' %(col_len, constants._MAX_COLS))
+    counts = counts.T.drop_duplicates().T
     return counts
 
 
@@ -701,7 +704,7 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     debug: bool=False) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     '''Computing microRNA activity per spot/cell.
 
-    Using mHG test.
+    Using mHG test, with Bonferroni correction accoridng to the number of miRs tested.
     If no targets are found in the reads table for a particular microRNA, 
     the result will be p-value of 0 for all cells/spots.
 
@@ -721,6 +724,7 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     miR_activity_pvals = []
     miR_activity_cutoffs = []
     len_ranked = len(ranked)
+    len_mir_list = len(miR_list)
     for miR in miR_list:
         miR_targets = list(mti_data[mti_data['miRNA'] == miR]['Target Gene'])
         v = np.uint8([int(g in miR_targets) for g in ranked_list])
@@ -731,9 +735,10 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
                                  'correct \'species\' flag was selected. The following '
                                  'targets were found: %s. ' %(miR, miR_targets))
         stat, cutoff, pval = xlmhg.xlmhg_test(v, X=_MHG_X_PARAM, L=len_ranked)
+        pval_corrected = pval*len_mir_list
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
-        miR_activity_pvals.append(pval)
+        miR_activity_pvals.append(pval_corrected)
 
     return cell, miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs
 
@@ -783,7 +788,7 @@ def sort_activity_spatial(miR_activity_pvals: pd.DataFrame, thresh: float,
     mir_activity_list = miR_activity_pvals[
         miR_activity_pvals < thresh].count(axis=1).sort_values(ascending=False)
     mir_activity_list = mir_activity_list / spots
-    mir_activity_list = pd.DataFrame(mir_activity_list)
+    mir_activity_list = pd.DataFrame(mir_activity_list).round(4)
     mir_activity_list.columns = ['Activity Score']
     mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
 
@@ -910,9 +915,10 @@ def sort_activity_sc_no_populations(miR_activity_pvals: pd.DataFrame) -> pd.Data
         Sorted list of microRNA, from the most overall active to the least, over all cells. 
     '''
     log10_pvals = -np.log10(miR_activity_pvals.astype(np.float64))
-    mir_activity_list = log10_pvals[
-        log10_pvals > _NON_ACTIVE_THRESH].mean(axis=1).sort_values(ascending=False)
-    mir_activity_list = pd.DataFrame(mir_activity_list)
+#    mir_activity_list = log10_pvals[
+#        log10_pvals > _NON_ACTIVE_THRESH].mean(axis=1).sort_values(ascending=False)
+    mir_activity_list = log10_pvals.mean(axis=1).sort_values(ascending=False)
+    mir_activity_list = pd.DataFrame(mir_activity_list).round(4)
     mir_activity_list.columns = ['Activity Score']
     mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
     return mir_activity_list
@@ -945,25 +951,29 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
     for miR in miR_list:
         pvals_pop_1 =  log10_pvals.loc[miR, pop_1_cols]
         pvals_pop_2 =  log10_pvals.loc[miR, pop_2_cols]
-        stat, pval = ranksums(
-            pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH], 
-            pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH])
+#        stat, pval = ranksums(
+#            pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH], 
+#            pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH])
+        stat, pval = ranksums(pvals_pop_1, pvals_pop_2)
         if np.isnan(pval):
             mir_activity_list['ranksum_pval'][miR] = 1
             mir_activity_list[col_name_pop_1][miR] = pvals_pop_1.mean()
             mir_activity_list[col_name_pop_2][miR] = pvals_pop_2.mean()
         else:
             mir_activity_list['ranksum_pval'][miR] = pval
-            mir_activity_list[col_name_pop_1][miR] = \
-                pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH].mean()
-            mir_activity_list[col_name_pop_2][miR] = \
-                pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH].mean()
+#            mir_activity_list[col_name_pop_1][miR] = \
+#                pvals_pop_1[pvals_pop_1 > _NON_ACTIVE_THRESH].mean()
+#            mir_activity_list[col_name_pop_2][miR] = \
+#                pvals_pop_2[pvals_pop_2 > _NON_ACTIVE_THRESH].mean()
+            mir_activity_list[col_name_pop_1][miR] = pvals_pop_1.mean()
+            mir_activity_list[col_name_pop_2][miR] = pvals_pop_2.mean()
+
 
     mir_activity_list = mir_activity_list.sort_values(by=['ranksum_pval'])
     for i in range(len(mir_activity_list)):
         if mir_activity_list.iloc[i]['ranksum_pval'] < 1:
             mir_activity_list.iloc[i]['fdr_corrected'] = \
-                mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1)
+                min(1, mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1))
 
     mean_all = mir_activity_list[col_name_pop_1].append(mir_activity_list[col_name_pop_2])
     very_active = mean_all.quantile(0.97)
@@ -1137,14 +1147,18 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
         plt.close()
         logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_hist_plot))
         ref_hist_path = '"./activity maps/%s"' %hist_plot_file_name 
-        score_col_rename = '<a href=%s target="_blank">%s</a>' %(ref_hist_path, wrk_fdr_result)
+        score_col_rename = '<a href=%s target="_blank">%s</a>' %(ref_hist_path, "{:.4e}".format(wrk_fdr_result))
         mir_activity_list['fdr_corrected'][miR] = score_col_rename
         mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
+    #mir_activity_list = mir_activity_list.apply(lambda x: '%.4e' % x, axis=1)
 
-    for miR in mir_activity_list.iloc[10:].index.to_list():
-        mir_activity_list['fdr_corrected'][miR] = str(mir_activity_list['fdr_corrected'][miR])
+    #for miR in mir_activity_list.iloc[10:].index.to_list():
+     #   mir_activity_list['fdr_corrected'][miR] = "{:.4e}".format(mir_activity_list['fdr_corrected'][miR])
+#        mir_activity_list['fdr_corrected'][miR] = str(mir_activity_list['fdr_corrected'][miR])
     mir_activity_list = mir_activity_list.reset_index()
     mir_activity_list_to_user = mir_activity_list[['MicroRNA', 'fdr_corrected']].copy()
     col_rename = '%s Vs. %s FDR Corrected ' %(populations[0],populations[1])
     mir_activity_list_to_user = mir_activity_list_to_user.rename(columns={'fdr_corrected': col_rename})
+    # pd.set_option("display.precision", 4)
+    # pd.set_option('display.float_format', '{:.4E}'.format)
     mir_activity_list_to_user.to_html(path_to_list, escape=False, index=False, justify='left')
