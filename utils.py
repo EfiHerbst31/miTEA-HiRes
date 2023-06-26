@@ -970,11 +970,18 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
 
 
     mir_activity_list = mir_activity_list.sort_values(by=['ranksum_pval'])
-    for i in range(len(mir_activity_list)):
-        if mir_activity_list.iloc[i]['ranksum_pval'] < 1:
-            mir_activity_list.iloc[i]['fdr_corrected'] = \
-                min(1, mir_activity_list.iloc[i]['ranksum_pval']*mir_amount/(i+1))
-
+    for index, row in mir_activity_list.iterrows():
+    #for i in range(len(mir_activity_list)):
+        if mir_activity_list.loc[index,'ranksum_pval'] < 1:
+            i = mir_activity_list.index.get_loc(index)
+            mir_activity_list.loc[index,'fdr_corrected'] = \
+                min(1, mir_activity_list.loc[index,'ranksum_pval']*mir_amount/(i+1))
+    '''if mir_activity_list.iloc[i]['ranksum_pval'] < 1:
+            miR = mir_activity_list.iloc[i].index
+            print(miR)
+            mir_activity_list.loc[miR,'fdr_corrected'] = \
+                min(1, mir_activity_list.loc[miR,'ranksum_pval']*mir_amount/(i+1))
+'''
     mean_all = mir_activity_list[col_name_pop_1].append(mir_activity_list[col_name_pop_2])
     very_active = mean_all.quantile(0.97)
     # very_active = mean_all.quantile(0.99)
