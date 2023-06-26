@@ -735,7 +735,7 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
                                  'correct \'species\' flag was selected. The following '
                                  'targets were found: %s. ' %(miR, miR_targets))
         stat, cutoff, pval = xlmhg.xlmhg_test(v, X=_MHG_X_PARAM, L=len_ranked)
-        pval_corrected = pval*len_mir_list
+        pval_corrected = min(1,pval*len_mir_list)
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
         miR_activity_pvals.append(pval_corrected)
