@@ -972,10 +972,10 @@ def sort_activity_sc_with_populations(miR_activity_pvals: pd.DataFrame,
     mir_activity_list = mir_activity_list.sort_values(by=['ranksum_pval'])
     for index, row in mir_activity_list.iterrows():
     #for i in range(len(mir_activity_list)):
-        if mir_activity_list.loc[index,'ranksum_pval'] < 1:
-            i = mir_activity_list.index.get_loc(index)
-            mir_activity_list.loc[index,'fdr_corrected'] = \
-                min(1, mir_activity_list.loc[index,'ranksum_pval']*mir_amount/(i+1))
+        #if mir_activity_list.loc[index,'ranksum_pval'] < 1:
+        i = mir_activity_list.index.get_loc(index)
+        mir_activity_list.loc[index,'fdr_corrected'] = \
+            min(1, mir_activity_list.loc[index,'ranksum_pval']*mir_amount/(i+1))
     '''if mir_activity_list.iloc[i]['ranksum_pval'] < 1:
             miR = mir_activity_list.iloc[i].index
             print(miR)
@@ -1100,64 +1100,75 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
     if not os.path.exists(results_path_figures):
         os.makedirs(results_path_figures)
 
-    for miR in miR_list_figures:
-        umap_plot_file_name = '%s_%s_%s_%s_%s.jpg' %(
-            dataset_name, miR, populations[0], populations[1], 'umap')
-        path_to_umap_plot = '%s/%s' %(results_path_figures, umap_plot_file_name)
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
-        sc.pl.umap(enriched_counts, size=10, show=False, ax=ax1)
-        sc.pl.umap(
-            enriched_counts[enriched_counts.obs['populations']==populations[0]], 
-            size=100,
-            color=miR, 
-            title='%s %s activity (-log10)' %(populations[0], miR), 
-            show=False, 
-            ax=ax1)
-        sc.pl.umap(enriched_counts, size=10, show=False, ax=ax2)
-        sc.pl.umap(
-            enriched_counts[enriched_counts.obs['populations']==populations[1]], 
-            size=100,
-            color=miR, 
-            title='%s %s activity (-log10)' %(populations[1], miR), 
-            show=False, 
-            ax=ax2)
-        fig.savefig(path_to_umap_plot)
-        logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_umap_plot))
-        ref_umap_path = '"./activity maps/%s"' %umap_plot_file_name 
-        index_rename = '<a href=%s target="_blank">%s</a>' %(ref_umap_path, miR)
-        
-        legend_loc = 'upper right'
-        hist_plot_file_name = '%s_%s_%s_%s_%s.jpg' %(
-            dataset_name, miR, populations[0], populations[1], 'histogram')
-        path_to_hist_plot = '%s/%s' %(results_path_figures, hist_plot_file_name )
-        log10_pvals = -np.log10(miR_activity_pvals)
-        pop_1_cols = [col for col in log10_pvals.columns if (populations[0] in col)]
-        pop_2_cols = [col for col in log10_pvals.columns if (populations[1] in col)]
-        pvals_pop_1 =  log10_pvals.loc[miR, pop_1_cols]
-        pvals_pop_2 =  log10_pvals.loc[miR, pop_2_cols]
-        wrk_fdr_result = mir_activity_list.loc[miR]['fdr_corrected']
-        bins = max(30, int(100 * (len(pvals_pop_1)+len(pvals_pop_2))/10000))
-        kwargs = dict(alpha=0.5, bins=bins, density=True, stacked=False, histtype="bar")
-        f, ax = plt.subplots()
-        plt.figure(figsize = (20, 10))
-        f.subplots_adjust(top=0.7)
-        plt.hist((pvals_pop_1, pvals_pop_2), **kwargs, label = (populations[0], populations[1]))
-        plt.xlabel('p-value (-log10)', fontsize = 26)
-        plt.ylabel('Probability', fontsize = 26)
-        plt.legend(loc=legend_loc, prop={'size': 28})
-        plt.xticks(fontsize=20)
-        plt.yticks(fontsize=20)
-        plt.title('%s Activity Histogram \n%s Vs. %s' %(miR, populations[0], populations[1]), 
-                fontsize=34, pad=40, y=0.95)
-        f.tight_layout(pad = 0.5)     
-        plt.savefig(path_to_hist_plot)
-        plt.close()
-        logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_hist_plot))
-        ref_hist_path = '"./activity maps/%s"' %hist_plot_file_name 
-        score_col_rename = '<a href=%s target="_blank">%s</a>' %(ref_hist_path, "{:.4e}".format(wrk_fdr_result))
-        mir_activity_list.loc[miR,'fdr_corrected'] = score_col_rename
-        mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
+    for miR, row in mir_activity_list.iterrows():
+        if miR in miR_list_figures:
+    #for miR in miR_list_figures:
+            umap_plot_file_name = '%s_%s_%s_%s_%s.jpg' %(
+                dataset_name, miR, populations[0], populations[1], 'umap')
+            path_to_umap_plot = '%s/%s' %(results_path_figures, umap_plot_file_name)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
+            sc.pl.umap(enriched_counts, size=10, show=False, ax=ax1)
+            sc.pl.umap(
+                enriched_counts[enriched_counts.obs['populations']==populations[0]], 
+                size=100,
+                color=miR, 
+                title='%s %s activity (-log10)' %(populations[0], miR), 
+                show=False, 
+                ax=ax1)
+            sc.pl.umap(enriched_counts, size=10, show=False, ax=ax2)
+            sc.pl.umap(
+                enriched_counts[enriched_counts.obs['populations']==populations[1]], 
+                size=100,
+                color=miR, 
+                title='%s %s activity (-log10)' %(populations[1], miR), 
+                show=False, 
+                ax=ax2)
+            fig.savefig(path_to_umap_plot)
+            logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_umap_plot))
+            ref_umap_path = '"./activity maps/%s"' %umap_plot_file_name 
+            index_rename = '<a href=%s target="_blank">%s</a>' %(ref_umap_path, miR)
+            
+            legend_loc = 'upper right'
+            hist_plot_file_name = '%s_%s_%s_%s_%s.jpg' %(
+                dataset_name, miR, populations[0], populations[1], 'histogram')
+            path_to_hist_plot = '%s/%s' %(results_path_figures, hist_plot_file_name )
+            log10_pvals = -np.log10(miR_activity_pvals)
+            pop_1_cols = [col for col in log10_pvals.columns if (populations[0] in col)]
+            pop_2_cols = [col for col in log10_pvals.columns if (populations[1] in col)]
+            pvals_pop_1 =  log10_pvals.loc[miR, pop_1_cols]
+            pvals_pop_2 =  log10_pvals.loc[miR, pop_2_cols]
+            wrk_fdr_result = mir_activity_list.loc[miR]['fdr_corrected']
+            bins = max(30, int(100 * (len(pvals_pop_1)+len(pvals_pop_2))/10000))
+            kwargs = dict(alpha=0.5, bins=bins, density=True, stacked=False, histtype="bar")
+            f, ax = plt.subplots()
+            plt.figure(figsize = (20, 10))
+            f.subplots_adjust(top=0.7)
+            plt.hist((pvals_pop_1, pvals_pop_2), **kwargs, label = (populations[0], populations[1]))
+            plt.xlabel('p-value (-log10)', fontsize = 26)
+            plt.ylabel('Probability', fontsize = 26)
+            plt.legend(loc=legend_loc, prop={'size': 28})
+            plt.xticks(fontsize=20)
+            plt.yticks(fontsize=20)
+            plt.title('%s Activity Histogram \n%s Vs. %s' %(miR, populations[0], populations[1]), 
+                    fontsize=34, pad=40, y=0.95)
+            f.tight_layout(pad = 0.5)     
+            plt.savefig(path_to_hist_plot)
+            plt.close()
+            logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_hist_plot))
+            ref_hist_path = '"./activity maps/%s"' %hist_plot_file_name 
+            score_col_rename = '<a href=%s target="_blank">%s</a>' %(ref_hist_path, "{:.4e}".format(wrk_fdr_result))
+            mir_activity_list.loc[miR,'fdr_corrected'] = score_col_rename
+            mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
+        else:
+            wrk_fdr_result = mir_activity_list.loc[miR]['fdr_corrected']
+            mir_activity_list.loc[miR,'fdr_corrected'] = '{:.4e}'.format(wrk_fdr_result)
     #mir_activity_list = mir_activity_list.apply(lambda x: '%.4e' % x, axis=1)
+    
+#    for miR, row in mir_activity_list.iterrows():
+#        if miR not in miR_list_figures:
+#            wrk_fdr_result = mir_activity_list.loc[miR]['fdr_corrected']
+#            mir_activity_list.loc[miR,'fdr_corrected'] = '{:.4e}'.format(wrk_fdr_result)
+    #mir_activity_list['fdr_corrected'] = mir_activity_list['fdr_corrected'].astype(str)
 
     #for miR in mir_activity_list.iloc[10:].index.to_list():
      #   mir_activity_list['fdr_corrected'][miR] = "{:.4e}".format(mir_activity_list['fdr_corrected'][miR])
