@@ -1148,7 +1148,7 @@ def plot_sc_with_populations(miR_list_figures: list, enriched_counts: sc.AnnData
         logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_hist_plot))
         ref_hist_path = '"./activity maps/%s"' %hist_plot_file_name 
         score_col_rename = '<a href=%s target="_blank">%s</a>' %(ref_hist_path, "{:.4e}".format(wrk_fdr_result))
-        mir_activity_list['fdr_corrected'][miR] = score_col_rename
+        mir_activity_list.loc[miR,'fdr_corrected'] = score_col_rename
         mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
     #mir_activity_list = mir_activity_list.apply(lambda x: '%.4e' % x, axis=1)
 
