@@ -877,7 +877,7 @@ def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame,
     logging.info('Computing UMAP.')
     sc.tl.pca(enriched_counts, svd_solver='arpack') 
     sc.pp.neighbors(enriched_counts, n_neighbors=10, n_pcs=30)
-    sc.tl.umap(enriched_counts)
+    sc.tl.umap(enriched_counts, random_state=0)
     logging.info('Enriching with microRNA activity results.')
     log10_pvals = -np.log10(miR_activity_pvals.astype(np.float64))
     mir_for_merge = sc.AnnData(log10_pvals.T)
