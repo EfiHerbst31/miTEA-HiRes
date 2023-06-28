@@ -876,7 +876,7 @@ def generate_umap(counts: pd.DataFrame, miR_activity_pvals: pd.DataFrame,
     sc.pp.scale(enriched_counts, max_value=10)
     logging.info('Computing UMAP.')
     sc.tl.pca(enriched_counts, svd_solver='arpack') 
-    sc.pp.neighbors(enriched_counts, n_neighbors=10, n_pcs=40)
+    sc.pp.neighbors(enriched_counts, n_neighbors=10, n_pcs=30)
 #    sc.pp.neighbors(enriched_counts, n_neighbors=10, n_pcs=30)
     sc.tl.umap(enriched_counts)
     logging.info('Enriching with microRNA activity results.')
