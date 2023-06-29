@@ -704,7 +704,7 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
     debug: bool=False) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     '''Computing microRNA activity per spot/cell.
 
-    Using mHG test, with Bonferroni correction accoridng to the number of miRs tested.
+    Using mHG test.
     If no targets are found in the reads table for a particular microRNA, 
     the result will be p-value of 0 for all cells/spots.
 
@@ -735,10 +735,9 @@ def compute_stats_per_cell(cell: str, ranked: pd.DataFrame, miR_list: list, mti_
                                  'correct \'species\' flag was selected. The following '
                                  'targets were found: %s. ' %(miR, miR_targets))
         stat, cutoff, pval = xlmhg.xlmhg_test(v, X=_MHG_X_PARAM, L=len_ranked)
-        pval_corrected = min(1,pval*len_mir_list)
         miR_activity_stats.append(stat)
         miR_activity_cutoffs.append(cutoff)
-        miR_activity_pvals.append(pval_corrected)
+        miR_activity_pvals.append(pval)
 
     return cell, miR_activity_stats, miR_activity_pvals, miR_activity_cutoffs
 
@@ -907,7 +906,7 @@ def sort_activity_sc(miR_activity_pvals: pd.DataFrame,
     return mir_activity_list
 
 def sort_activity_sc_no_populations(miR_activity_pvals: pd.DataFrame) -> pd.DataFrame:
-    '''Sorts microRNA's by their overall activity.
+    '''Sorts microRNA's by their FDR-corrected overall activity.
 
     Args:
         miR_activity_pvals: activity table per spot per microRNA.
@@ -915,11 +914,14 @@ def sort_activity_sc_no_populations(miR_activity_pvals: pd.DataFrame) -> pd.Data
     Returns:
         Sorted list of microRNA, from the most overall active to the least, over all cells. 
     '''
-    log10_pvals = -np.log10(miR_activity_pvals.astype(np.float64))
+#    log10_pvals = -np.log10(miR_activity_pvals.astype(np.float64))
 #    mir_activity_list = log10_pvals[
 #        log10_pvals > _NON_ACTIVE_THRESH].mean(axis=1).sort_values(ascending=False)
-    mir_activity_list = log10_pvals.mean(axis=1).sort_values(ascending=False)
-    mir_activity_list = pd.DataFrame(mir_activity_list).round(4)
+    mir_activity_list = miR_activity_pvals.mean(axis=1).sort_values(ascending=True)
+    mir_amount = len(mir_activity_list)
+    for i in range(mir_amount):
+        mir_activity_list[i] = min(1, mir_activity_list[i]*mir_amount/(i+1))
+    mir_activity_list = pd.DataFrame(mir_activity_list)#.round(4)
     mir_activity_list.columns = ['Activity Score']
     mir_activity_list = mir_activity_list.rename_axis('MicroRNA')
     return mir_activity_list
@@ -1043,7 +1045,7 @@ def plot_sc(miR_list_figures: list, enriched_counts: sc.AnnData, results_path: s
 def plot_sc_no_populations(miR_list_figures: list, enriched_counts: sc.AnnData, results_path: str, 
     dataset_name: str, mir_activity_list: pd.DataFrame):
     '''Produces UMAP figure with microRNA activity levels per microRNA in the list.
-       Produces also a html file with list of microRNAs, sorted by their overall activity.
+       Produces also a html file with list of microRNAs, sorted by their overall corrected activity.
 
     Args:
         miR_list_figures: list of microRNAs to produce figures for.
@@ -1062,16 +1064,19 @@ def plot_sc_no_populations(miR_list_figures: list, enriched_counts: sc.AnnData, 
     if not os.path.exists(results_path_figures):
         os.makedirs(results_path_figures)
 
-    for miR in miR_list_figures:
-        plot_file_name = '%s_%s_%s.jpg' %(dataset_name, miR, 'umap')
-        path_to_plot = '%s/%s' %(results_path_figures, plot_file_name)
-        fig, ax = plt.subplots(figsize=(10, 10))
-        sc.pl.umap(enriched_counts, color=miR, title='%s activity (-log10)' %miR, show=False, ax=ax)
-        fig.savefig(path_to_plot)
-        logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_plot))
-        ref_path = '"./activity maps/%s"' %plot_file_name 
-        index_rename = '<a href=%s target="_blank">%s</a>' %(ref_path, miR)
-        mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
+    for miR, row in mir_activity_list.iterrows():
+        activity_score = mir_activity_list.loc[miR]['Activity Score']
+        mir_activity_list.loc[miR,'Activity Score'] = '{:.4e}'.format(activity_score)
+        if miR in miR_list_figures:
+            plot_file_name = '%s_%s_%s.jpg' %(dataset_name, miR, 'umap')
+            path_to_plot = '%s/%s' %(results_path_figures, plot_file_name)
+            fig, ax = plt.subplots(figsize=(10, 10))
+            sc.pl.umap(enriched_counts, color=miR, title='%s activity (-log10)' %miR, show=False, ax=ax)
+            fig.savefig(path_to_plot)
+            logging.debug('Figure generated for %s, saved in %s' %(miR, path_to_plot))
+            ref_path = '"./activity maps/%s"' %plot_file_name 
+            index_rename = '<a href=%s target="_blank">%s</a>' %(ref_path, miR)
+            mir_activity_list = mir_activity_list.rename(index={miR:index_rename})
     mir_activity_list = mir_activity_list.reset_index()
     mir_activity_list.to_html(path_to_list, escape=False, index=False, justify='left')
 
