@@ -24,7 +24,7 @@ _HOMO_MTI_FILE = 'hsa_MTI_filtered.csv'
 _MUS_MTI_FILE = 'mmu_MTI_filtered.csv'
 _MHG_X_PARAM = 1
 #_NON_ACTIVE_THRESH = 1.5
-_VERY_ACTIVE_THRESH = 7
+#_VERY_ACTIVE_THRESH = 7
 _10X_SCRNASEQ_FEATURES_SUFFIX = '_genes.tsv'
 _10X_SCRNASEQ_BARCODES_SUFFIX = '_barcodes.tsv'
 
