@@ -21,12 +21,14 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer(
     'cpus', None, 
-    '(Optional) Number of CPUs to use in parallel. Default: all available cpus are used.')
+    ('(Optional) Number of CPUs to use in parallel. Default: all available cpus'
+     ' are used.'))
 flags.DEFINE_string(
     'data_path', None, 
-    ('(Required) Path to your dataset. If %s: path to dataset, if %s: path to the folder containing'
-    ' %s folders.' % (constants._DATA_TYPE_SINGLE_CELL, constants._DATA_TYPE_SPATIAL, 
-     ' and '.join(constants._SPATIAL_FOLDERS))))
+    ('(Required) Path to your dataset. If %s: path to dataset, if %s: path to '
+     'the folder containing %s folders.' % (
+         constants._DATA_TYPE_SINGLE_CELL, constants._DATA_TYPE_SPATIAL, 
+         ' and '.join(constants._SPATIAL_FOLDERS))))
 flags.DEFINE_string(
     'dataset_name', None, 
     '(Required) Name of your dataset. This is used to generate results path.')
@@ -34,26 +36,30 @@ flags.DEFINE_boolean(
     'debug', False, '(Optional) Produces debugging output.')
 flags.DEFINE_integer(
     'filter_spots', None, 
-    ('(Optional) Filter spots containins total amount of reads below the specified number. '
-    'Relevant only for %s data. Default: do not filter any spot.' % constants._DATA_TYPE_SPATIAL))
+    ('(Optional) Filter spots containins total amount of reads below the '
+     'specified number. Relevant only for %s data. Default: do not filter any '
+     'spot.' % constants._DATA_TYPE_SPATIAL))
 flags.DEFINE_string(
     'miR_figures', constants._DRAW_TOP_10, 
-    ('(Optional) Which microRNA activity maps to plot from a sorted list of potentially '
-    'interesting microRNAs. Options: %s .' % ' or '.join(constants._SUPPORTED_DRAW)))
+    ('(Optional) Which microRNA activity maps to plot from a sorted list of '
+     'potentially interesting microRNAs. Options: %s .' % ' or '.join(
+        constants._SUPPORTED_DRAW)))
 flags.DEFINE_list(
     'miR_list', None, 
-    ('(Optional) Comma-separated list of microRNAs to compute. Default: all microRNAs are '
-    'considered. Example use: -miR_list=hsa-miR-300,hsa-miR-6502-5p,hsa-miR-6727-3p'))
+    ('(Optional) Comma-separated list of microRNAs to compute. Default: all '
+     'microRNAs are considered. '
+     'Example use: -miR_list=hsa-miR-300,hsa-miR-6502-5p,hsa-miR-6727-3p'))
 flags.DEFINE_list(
     'populations', None,
-    ('(Optional) Comma-separated list of two unique population string identifiers embedded in cell '
-    'id. Required in order to compute in \'Comparative\' mode. Default: Computing in \'Total\' mode'
-    ', ignoring populations. Example use: -populations=\'DISEASE\',\'CONTROL\''))
+    ('(Optional) Comma-separated list of two unique population string '
+     'identifiers embedded in cell id. Required in order to compute in '
+     '\'Comparative\' mode. Default: Computing in \'Total\' mode, ignoring '
+     'populations. Example use: -populations=\'DISEASE\',\'CONTROL\''))
 flags.DEFINE_boolean(
     'preprocess', True, 
-    ('(Optional) Performs additional preprocessing on %s data before computations: merges all '
-     'files found under \'data_path\' and samples %s columns. ' % (
-         constants._DATA_TYPE_SINGLE_CELL, constants._MAX_COLS)))
+    ('(Optional) Performs additional preprocessing on %s data before '
+     'computations: merges all files found under \'data_path\' and samples %s '
+     'columns. ' % (constants._DATA_TYPE_SINGLE_CELL, constants._MAX_COLS)))
 flags.DEFINE_string(
     'results_path', None, 
     '(Optional) Path to save results. Default: \'data_path\'')
@@ -65,9 +71,10 @@ flags.DEFINE_string(
     ('(Optional) %s.' %' or '.join(constants._SUPPORTED_SPECIES)))
 flags.DEFINE_float(
     'thresh', constants._ACTIVITY_THRESH, 
-    ('(Optional) Threshold for the microRNA activity p-value. If a microRNA at a specific spot '
-    'gets a lower score than \'thresh\', it is considered active in that spot. Used in order to '
-    'find the most active microRNAs across all the spots. Relevant only for %s data.' 
+    ('(Optional) Threshold for the microRNA activity p-value. If a microRNA at '
+     'a specific spot gets a lower score than \'thresh\', it is considered '
+     'active in that spot. Used in order to find the most active microRNAs '
+     'across all the spots. Relevant only for %s data.' 
     % constants._DATA_TYPE_SPATIAL))
 
 flags.register_validator('species', 
@@ -96,13 +103,14 @@ def process_data(
         data_path: Path to data.
         dataset_name: Dataset name.
         data_type: (optional) Data type 'spatial' or 'scRNAseq'.
-        preprocess: (optional) If True (default), performing additional data preprocessing 
-            (i.e. merging multiple files, and sampling if data is too big). If False, data will 
-            not be preprocessed. 
-        filter_spots: (optional) Filter spots containing total number of reads below this number. 
-            Relevant only for spatial data. Default: no filtering.
-        sample_size: (optional) Amount of cells to sample, if 'preprocess' is true. Relevant only 
-            for single-cell data.
+        preprocess: (optional) If True (default), performing additional data 
+            preprocessing (i.e. merging multiple files, and sampling if data is 
+            too big). If False, data will not be preprocessed. 
+        filter_spots: (optional) Filter spots containing total number of reads 
+            below this number. Relevant only for spatial data. 
+            Default: no filtering.
+        sample_size: (optional) Amount of cells to sample, if 'preprocess' is 
+            true. Relevant only for single-cell data.
 
     Returns:
         Normalized reads table.
@@ -135,10 +143,11 @@ def compute_mir_activity(
     Args:
         counts_norm: Normalized reads table.
         results_path: Path to save results.
-        miR_list: (optional) List of microRNAs to compute. Default: all miRs available.
-        cpus: (optional) Amount of cpus to use in parallel. Default: all available cpus.
-        species: (optional) Either 'homo_sapiens' (default) or 'mus_musculus' are supported. 
-        debug: (optional) If True, provides aditional information. Default: False.
+        miR_list: (optional) List of miRs to compute. Default: all miRs.
+        cpus: (optional) Amount of cpus to use in parallel. Default: all cpus.
+        species: (optional) 'homo_sapiens' (default) or 'mus_musculus'. 
+        debug: (optional) If True, provides aditional information. 
+            Default: False.
     
     Returns:
         List of computed microRNAs.
@@ -175,7 +184,8 @@ def post_processing_spatial(
         ) -> None:
     """Post processing for spatial data.
 
-    Sorting microRNAs by their abundance of activity across spots and producing activity maps. 
+    Sorting microRNAs by their abundance of activity across spots and producing 
+    activity maps. 
 
     Args:
         data_path: Path to data.
@@ -185,8 +195,8 @@ def post_processing_spatial(
         results_path: Path to save results.
         dataset_name: Dataset name.         
         data_type: (optional) Data type 'spatial' or 'scRNAseq'.
-        miR_figures: (optional) Which microRNAs to plot from a sorted list of potentially 
-            interesting miRs. Default: top_10.
+        miR_figures: (optional) Which microRNAs to plot from a sorted list of 
+            potentially interesting miRs. Default: top_10.
         thresh: (optional) Thresold to define what is considered active.
 
     Returns:
@@ -198,7 +208,8 @@ def post_processing_spatial(
     if not data_type:
        data_type =  utils.check_data_type(data_path)
     if data_type is not constants._DATA_TYPE_SPATIAL:
-        raise utils.UsageError('No spatial data was found for post-processing in %s.' % data_path)
+        raise utils.UsageError('No spatial data was found for post-processing '
+                               'in %s.' % data_path)
     logging.info('Generating activity map figures.')
     spatial_coors = utils.get_spatial_coors(data_path, counts_norm)
     spots = spatial_coors.shape[0]
@@ -215,7 +226,7 @@ def post_processing_spatial(
         miR_figures,
         mir_activity_list)
 
-    utils.produce_spatial_maps(
+    utils.plot_spatial_maps(
         miR_list_figures, 
         miR_activity_pvals, 
         spatial_coors, 
@@ -237,8 +248,9 @@ def post_processing_single_cell(
     """Post processing for scRNAseq data.
 
     Computing UMAP based on gene expression. 
-    Determined by 'Total' (populations = None) or 'Comparative' (populations provided) modes, 
-    microRNAs are sorted by their potential interest, and activity maps are plotted.
+    Determined by 'Total' (populations = None) or 'Comparative' (populations 
+    provided) modes, microRNAs are sorted by their potential interest, 
+    and activity maps are plotted.
 
     Args:
         data_path: Path to data.
@@ -248,11 +260,12 @@ def post_processing_single_cell(
         results_path: Path to save results.
         dataset_name: Dataset name.         
         data_type: (optional) Data type 'spatial' or 'scRNAseq'.
-        miR_figures: (optional) Which microRNAs to plot from a sorted list of potentially 
-            interesting miRs. Default: top_10.
-        populations: (optional) List of two unique population string identifiers embedded in cell id.
-            Required in order to compute in 'Comparative' mode. Default: Computing in 'Total' mode,
-            ignoring populations. Example use: populations='DISEASE','CONTROL'
+        miR_figures: (optional) Which microRNAs to plot from a sorted list of 
+            potentially interesting miRs. Default: top_10.
+        populations: (optional) List of two unique population string identifiers 
+            embedded in cell id. Required in order to compute in 'Comparative' 
+            mode. Default: Computing in 'Total' mode,ignoring populations. 
+            Example use: populations='DISEASE','CONTROL'
 
     Returns:
         None.
@@ -263,12 +276,14 @@ def post_processing_single_cell(
     if not data_type:
        data_type =  utils.check_data_type(data_path)
     if data_type is not constants._DATA_TYPE_SINGLE_CELL:
-        raise utils.UsageError('No scRNAseq data was found for post-processing in %s.' % data_path)
+        raise utils.UsageError('No scRNAseq data was found for post-processing '
+                               'in %s.' % data_path)
     logging.info('Single cell post processing.')
     if not populations:
         logging.info('Computing in \'Total\' activity mode.')
     else:
-        logging.info('Populations identified, computing in \'Comparative\' activity mode.')
+        logging.info('Populations identified, computing in \'Comparative\' '
+                     'activity mode.')
 
     enriched_counts = utils.generate_umap(
         counts, 
@@ -317,25 +332,32 @@ def compute(
     Args:
         data_path: Path to data.
         dataset_name: Dataset name. 
-        miR_list: (optional) List of microRNAs to compute. Default: all available miRs.
-        cpus: (optional) Amount of cpus to use in parallel. Default: all available cpus.
+        miR_list: (optional) List of microRNAs to compute. Default: all 
+            available miRs.
+        cpus: (optional) Amount of cpus to use in parallel. Default: all 
+            available cpus.
         results_path: (optional) Path to save results. Default: data_path.
-        sample_size: (optional) Amount of cells to sample in total (default: 10K), 
-            if 'preprocess' is true. 
-        species: (optional) Either 'homo_sapiens' (default) or 'mus_musculus' are supported. 
-        miR_figures: (optional) Which microRNAs to plot from a sorted list of potentially 
-            interesting miRs. Default: top_10.
-        preprocess: (optional) If True (default), performing additional data preprocessing on 
-            single cell data before computations: merging all files found under 'data_path' and 
-            sampling according to 'sample_size' if data is too big. If False, does not perform 
-            data preprocessing. 
-        thresh: (optional) Thresold to define what is considered an active spot (only spatial data).
-        populations: (optional) List of two unique population string identifiers embedded in cell id.
-            Required in order to compute in 'Comparative' mode. Default: Computing in 'Total' mode,
-            ignoring populations. Example use: populations='DISEASE','CONTROL'
-        filter_spots: (optional) Filter spots containing total reads below this number 
+        sample_size: (optional) Amount of cells to sample in total 
+            (default: 10K), if 'preprocess' is true. 
+        species: (optional) Either 'homo_sapiens' (default) or 'mus_musculus' 
+            are supported. 
+        miR_figures: (optional) Which microRNAs to plot from a sorted list of 
+            potentially interesting miRs. Default: top_10.
+        preprocess: (optional) If True (default), performing additional data 
+            preprocessing on single cell data before computations: merging all 
+            files found under 'data_path' and sampling according to 
+            'sample_size' if data is too big. If False, does not perform data 
+            preprocessing. 
+        thresh: (optional) Thresold to define what is considered an active spot 
             (only spatial data).
-        debug: (optional) If True, provides aditional information. Default: False.
+        populations: (optional) List of two unique population string identifiers 
+            embedded in cell id. Required in order to compute in 'Comparative' 
+            mode. Default: Computing in 'Total' mode, ignoring populations. 
+            Example use: populations='DISEASE','CONTROL'
+        filter_spots: (optional) Filter spots containing total reads below this 
+            number (only spatial data).
+        debug: (optional) If True, provides aditional information. 
+            Default: False.
 
     Returns:
         None
