@@ -10,7 +10,7 @@ If you use miTEA-HiRes in your research, please cite [1].
 ## Installation
 You will need Python 3.8 or above.
 ```
-pip install mitea_hires
+pip install mitea-hires
 ```
 
 ## Support and bug report:
