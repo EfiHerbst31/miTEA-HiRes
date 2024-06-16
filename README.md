@@ -54,7 +54,7 @@ dataset_name = 'NAME_OF_YOUR_DATASET'
 mitea_hires.compute(data_path=data_path, dataset_name=dataset_name)
 ```
 
-# Example 2 - Single-cell data with 'Comaprative' activity mode
+# Example 2 - Single-cell data with 'Comparative' activity mode
 In this case, miTEA-HiRes computes microRNA differential activity for two populations of interest. 
 microRNA activity for each population is presented on histogram and UMAP layouts for miroRNAs of 
 potential interest.
@@ -106,13 +106,13 @@ mitea-hires --data_path='PATH_TO_YOUR_DATA' --dataset_name='DATASET_NAME'
 # Recommended setup
 mitea-hires is desinged to utilize all CPUs available for parallel computing, hence in order to 
 speed up the processing time, you may want to consider using resources with more CPUs.
-For example, an input of spatial trascriptomics data including 2,264 spots, ~6,000 genes per spot, 
+For example, an input of spatial transcriptomics data including 2,264 spots, ~6,000 genes per spot, 
 computing activity for 706 microRNAs using a cloud instance with 16 cores takes 22 minutes.
 
 # Advanced usage
 run ```mitea-hires --helpfull``` in command line to see additional supported flags.
 
-mitea-hires can also be imported within your python script and then, end-to-end compuation can be 
+mitea-hires can also be imported within your python script and then, end-to-end computation can be 
 executed calling the 'compute' function. Alternatively, in order to use parts of the computation, 
 other functions can be called.
 
