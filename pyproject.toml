@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mitea_hires"
-version = "0.0.18"
+version = "0.0.19"
 dependencies = [
   "absl-py",
   "anndata",
   "matplotlib",
   "numpy==1.23",
-  "pandas",
+  "pandas==1.5.2",
   "scanpy",
   "scipy",
   "tqdm==4.64.1",
