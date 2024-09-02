@@ -69,7 +69,7 @@ Example using command line:
 ```
 mitea-hires --data_path='PATH_TO_YOUR_DATA' --dataset_name='DATASET_NAME' --populations='DISEASE','CONTROL'
 ```
-# Example 3 - Spatial trascriptomics data
+# Example 3 - Spatial transcriptomics data
 In this case, miTEA-HiRes computes the activity for each spot and microRNA, and produces spatial 
 activity maps for microRNAs which are most abundantly active throughout the spots.
 ### Input format:
