@@ -4,7 +4,7 @@ miTEA-HiRes is an open-source package, designed to easily compute high resolutio
 maps. This package is used in our paper "Inferring single-cell and spatial microRNA 
 activity from transcriptomics data" by Herbst et al [1].
 
-If you use miTEA-HiRes in your research, please cite [1]. 
+If you use miTEA-HiRes in your research, please cite [Herbst et al. (Nature Communications Biology, 2025) [1]](https://www.nature.com/articles/s42003-025-07454-9). 
 *** add link and publication 
 
 ## Installation
