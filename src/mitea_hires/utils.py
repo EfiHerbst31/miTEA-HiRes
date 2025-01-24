@@ -909,7 +909,7 @@ def plot_spatial_maps(miR_list_figures: list,
     """
     logging.debug('Generating figures.')
     results_path_figures = os.path.join(results_path, 'activity maps')
-    plot_label = 'p-value (-log10)'
+    plot_label = '-log10(p-value)'
     path_to_list = os.path.join(results_path, 'sorted_mir_by_activity.html')
     if not os.path.exists(results_path_figures):
         os.makedirs(results_path_figures)
@@ -1299,7 +1299,7 @@ def plot_single_cell_comparative_mode(miR_list_figures: list,
             f.subplots_adjust(top=0.7)
             plt.hist((pvals_pop_1, pvals_pop_2), **kwargs,
                      label=(populations[0], populations[1]))
-            plt.xlabel('p-value (-log10)', fontsize=26)
+            plt.xlabel('-log10(p-value)', fontsize=26)
             plt.ylabel('Probability', fontsize=26)
             plt.legend(loc=legend_loc, prop={'size': 28})
             plt.xticks(fontsize=20)
