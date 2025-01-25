@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mitea_hires"
+version = "0.0.19"
+dependencies = [
+  "absl-py",
+  "anndata",
+  "matplotlib",
+  "numpy==1.23",
+  "pandas==1.5.2",
+  "scanpy",
+  "scipy",
+  "tqdm==4.64.1",
+  "xlmhg",
+]
+authors = [
+  { name="Efrat Herbst", email="efiherbst@gmail.com" },
+]
+description = "Infer single-cell and spatial microRNA activity from transcriptomics data"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+keywords = ["microrna", "mir", "mitea", "single-cell", "spatial", "gene expression", "rna sequencing"]
+
+[project.urls]
+Repository = "https://github.com/EfiHerbst31/miTEA-HiRes"
+Issues = "https://github.com/EfiHerbst31/miTEA-HiRes/issues"
+
+[tool.setuptools.package-data]
+"mitea_hires.miRTarBase" = ["*.csv"]
+
+[project.scripts]
+mitea-hires = "mitea_hires.main:main"
